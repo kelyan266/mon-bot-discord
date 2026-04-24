@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
 const WARNINGS_FILE = path.join(DATA_DIR, "warnings.json");
+const AUTO_ROLES_FILE = path.join(DATA_DIR, "autoRoles.json");
 
 export interface WarningRecord {
   id: string;
@@ -19,8 +20,14 @@ interface WarningsDb {
   warnings: WarningRecord[];
 }
 
+interface AutoRolesDb {
+  roles: Record<string, string>;
+}
+
 let cache: WarningsDb | null = null;
 let writeLock: Promise<void> = Promise.resolve();
+let autoRolesCache: AutoRolesDb | null = null;
+let autoRolesWriteLock: Promise<void> = Promise.resolve();
 
 async function ensureLoaded(): Promise<WarningsDb> {
   if (cache) return cache;
@@ -85,6 +92,55 @@ export async function clearWarnings(
   const removed = before - db.warnings.length;
   if (removed > 0) await persist();
   return removed;
+}
+
+async function ensureAutoRolesLoaded(): Promise<AutoRolesDb> {
+  if (autoRolesCache) return autoRolesCache;
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    const text = await fs.readFile(AUTO_ROLES_FILE, "utf8");
+    autoRolesCache = JSON.parse(text) as AutoRolesDb;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      autoRolesCache = { roles: {} };
+      await persistAutoRoles();
+    } else {
+      throw err;
+    }
+  }
+  return autoRolesCache!;
+}
+
+async function persistAutoRoles(): Promise<void> {
+  if (!autoRolesCache) return;
+  const snapshot = JSON.stringify(autoRolesCache, null, 2);
+  autoRolesWriteLock = autoRolesWriteLock.then(async () => {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.writeFile(AUTO_ROLES_FILE, snapshot, "utf8");
+  });
+  await autoRolesWriteLock;
+}
+
+export async function getAutoRole(guildId: string): Promise<string | null> {
+  const db = await ensureAutoRolesLoaded();
+  return db.roles[guildId] ?? null;
+}
+
+export async function setAutoRole(
+  guildId: string,
+  roleId: string,
+): Promise<void> {
+  const db = await ensureAutoRolesLoaded();
+  db.roles[guildId] = roleId;
+  await persistAutoRoles();
+}
+
+export async function clearAutoRole(guildId: string): Promise<boolean> {
+  const db = await ensureAutoRolesLoaded();
+  if (!(guildId in db.roles)) return false;
+  delete db.roles[guildId];
+  await persistAutoRoles();
+  return true;
 }
 
 export async function removeWarning(

@@ -8,9 +8,12 @@ import {
 } from "discord.js";
 import {
   addWarning,
+  clearAutoRole,
   clearWarnings,
+  getAutoRole,
   getWarnings,
   removeWarning,
+  setAutoRole,
 } from "./storage.js";
 import { getUserStats } from "./antiSpam.js";
 
@@ -230,6 +233,38 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "autorole",
+      description:
+        "Configure the role automatically given to new members on join",
+      default_member_permissions: PermissionFlagsBits.ManageGuild.toString(),
+      dm_permission: false,
+      options: [
+        {
+          name: "set",
+          description: "Set the role to auto-assign on join",
+          type: ApplicationCommandOptionType.Subcommand,
+          options: [
+            {
+              name: "role",
+              description: "The role to assign",
+              type: ApplicationCommandOptionType.Role,
+              required: true,
+            },
+          ],
+        },
+        {
+          name: "clear",
+          description: "Disable auto-role on this server",
+          type: ApplicationCommandOptionType.Subcommand,
+        },
+        {
+          name: "show",
+          description: "Show the currently configured auto-role",
+          type: ApplicationCommandOptionType.Subcommand,
+        },
+      ],
+    },
+    {
       name: "slowmode",
       description: "Set the slowmode delay for this channel (0 to disable)",
       default_member_permissions:
@@ -324,6 +359,8 @@ export async function handleInteraction(
       return handleSlowmode(interaction);
     case "userstats":
       return handleUserStats(interaction);
+    case "autorole":
+      return handleAutoRole(interaction);
     default:
       await reply(
         interaction,
@@ -787,6 +824,129 @@ async function handleUserStats(
       .setFooter({
         text: "Stats reset whenever the bot restarts.",
       }),
+    true,
+  );
+}
+
+async function handleAutoRole(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand(true);
+
+  if (sub === "show") {
+    const roleId = await getAutoRole(guild.id);
+    if (!roleId) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_PRIMARY)
+          .setTitle("Auto-role")
+          .setDescription("No auto-role is configured for this server."),
+        true,
+      );
+      return;
+    }
+    const role = guild.roles.cache.get(roleId);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("Auto-role")
+        .setDescription(
+          role
+            ? `New members will receive <@&${role.id}> on join.`
+            : `Configured role \`${roleId}\` no longer exists. Use \`/autorole clear\` or set a new one.`,
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "clear") {
+    const removed = await clearAutoRole(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(removed ? COLOR_SUCCESS : COLOR_PRIMARY)
+        .setTitle("Auto-role")
+        .setDescription(
+          removed
+            ? "Auto-role has been disabled for this server."
+            : "No auto-role was configured.",
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "set") {
+    const role = interaction.options.getRole("role", true);
+    const me = guild.members.me;
+    if (!me) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription("I cannot find my own member profile."),
+        true,
+      );
+      return;
+    }
+    if (role.id === guild.roles.everyone.id) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription("You cannot use @everyone as the auto-role."),
+        true,
+      );
+      return;
+    }
+    if ("managed" in role && role.managed) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription(
+            "That role is managed by an integration and cannot be assigned manually.",
+          ),
+        true,
+      );
+      return;
+    }
+    if (role.position >= me.roles.highest.position) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription(
+            `I cannot assign <@&${role.id}> — its position is equal to or above my highest role. Move my role above it in Server Settings → Roles.`,
+          ),
+        true,
+      );
+      return;
+    }
+    await setAutoRole(guild.id, role.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("Auto-role updated")
+        .setDescription(
+          `New members will now receive <@&${role.id}> on join.`,
+        )
+        .setTimestamp(),
+      true,
+    );
+    return;
+  }
+
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(COLOR_DANGER)
+      .setDescription("Unknown subcommand."),
     true,
   );
 }

@@ -9,7 +9,7 @@ import {
 } from "discord.js";
 import { commandDefinitions, handleInteraction } from "./commands.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
-import { addWarning, getWarnings } from "./storage.js";
+import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
@@ -245,13 +245,18 @@ async function handleToxicity(message: Message): Promise<void> {
 
 client.on(Events.GuildMemberAdd, async (member) => {
   if (member.user.bot) return;
-  const role = member.guild.roles.cache.find(
-    (r) => r.name === AUTO_ROLE_NAME,
-  );
+
+  const configuredId = await getAutoRole(member.guild.id).catch(() => null);
+  const role = configuredId
+    ? member.guild.roles.cache.get(configuredId)
+    : member.guild.roles.cache.find((r) => r.name === AUTO_ROLE_NAME);
+
   if (!role) {
-    console.log(
-      `Auto-role: "${AUTO_ROLE_NAME}" not found in ${member.guild.name}`,
-    );
+    if (configuredId) {
+      console.log(
+        `Auto-role: configured role ${configuredId} no longer exists in ${member.guild.name}`,
+      );
+    }
     return;
   }
   const me = member.guild.members.me;
