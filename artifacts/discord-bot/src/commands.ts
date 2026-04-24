@@ -234,6 +234,11 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "help",
+      description: "Show the list of available commands",
+      dm_permission: false,
+    },
+    {
       name: "embed",
       description: "Post a styled announcement embed in this channel",
       default_member_permissions:
@@ -437,6 +442,8 @@ export async function handleInteraction(
       return handleLock(interaction, false);
     case "embed":
       return handleEmbed(interaction);
+    case "help":
+      return handleHelp(interaction);
     default:
       await reply(
         interaction,
@@ -902,6 +909,69 @@ async function handleUserStats(
       }),
     true,
   );
+}
+
+async function handleHelp(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const embed = new EmbedBuilder()
+    .setColor(COLOR_PRIMARY)
+    .setTitle("📜 Commandes du bot")
+    .setDescription("Voici la liste des commandes disponibles :")
+    .addFields(
+      {
+        name: "🛡️ Modération",
+        value:
+          "`/warn` → Avertir un membre\n" +
+          "`/warnings` → Voir les avertissements d'un membre\n" +
+          "`/clearwarnings` → Effacer tous les avertissements\n" +
+          "`/delwarning` → Supprimer un avertissement par ID\n" +
+          "`/kick` → Expulser un membre\n" +
+          "`/ban` → Bannir un membre\n" +
+          "`/unban` → Débannir un utilisateur\n" +
+          "`/timeout` → Mute temporaire\n" +
+          "`/untimeout` → Retirer un mute\n" +
+          "`/purge` → Supprimer plusieurs messages",
+      },
+      {
+        name: "🔒 Salons",
+        value:
+          "`/lock` → Verrouiller le salon\n" +
+          "`/unlock` → Déverrouiller le salon\n" +
+          "`/slowmode` → Définir le slowmode",
+      },
+      {
+        name: "🔍 Utilitaires",
+        value:
+          "`/snipe` → Voir le dernier message supprimé\n" +
+          "`/userstats` → Stats anti-spam d'un membre\n" +
+          "`/ping` → Vérifier la latence du bot",
+      },
+      {
+        name: "⚙️ Configuration",
+        value:
+          "`/autorole set` → Rôle auto à l'arrivée\n" +
+          "`/autorole show` → Voir le rôle auto\n" +
+          "`/autorole clear` → Désactiver le rôle auto",
+      },
+      {
+        name: "🎨 Autres",
+        value: "`/embed` → Envoyer une annonce stylée",
+      },
+      {
+        name: "🤖 Auto-modération",
+        value:
+          "Anti-spam pondéré + détection IA de toxicité (gpt-5-nano).\n" +
+          "Messages toxiques (>0.8) supprimés automatiquement.\n" +
+          "3 avertissements automatiques → kick.",
+      },
+    )
+    .setFooter({
+      text: `${commandDefinitions.length} commandes • Utilise / pour les invoquer`,
+    })
+    .setTimestamp();
+
+  await reply(interaction, embed, true);
 }
 
 const EMBED_COLORS: Record<string, number> = {
