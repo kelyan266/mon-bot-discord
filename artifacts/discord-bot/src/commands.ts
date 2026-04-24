@@ -234,6 +234,40 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "embed",
+      description: "Post a styled announcement embed in this channel",
+      default_member_permissions:
+        PermissionFlagsBits.ManageMessages.toString(),
+      dm_permission: false,
+      options: [
+        {
+          name: "message",
+          description: "The announcement text",
+          type: ApplicationCommandOptionType.String,
+          required: true,
+        },
+        {
+          name: "title",
+          description: "Optional title (default: 📢 Annonce)",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+        },
+        {
+          name: "color",
+          description: "Embed color",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+          choices: [
+            { name: "Blue", value: "blue" },
+            { name: "Green", value: "green" },
+            { name: "Yellow", value: "yellow" },
+            { name: "Red", value: "red" },
+            { name: "Purple", value: "purple" },
+          ],
+        },
+      ],
+    },
+    {
       name: "lock",
       description: "Lock this channel so @everyone cannot send messages",
       default_member_permissions: PermissionFlagsBits.ManageChannels.toString(),
@@ -401,6 +435,8 @@ export async function handleInteraction(
       return handleLock(interaction, true);
     case "unlock":
       return handleLock(interaction, false);
+    case "embed":
+      return handleEmbed(interaction);
     default:
       await reply(
         interaction,
@@ -864,6 +900,54 @@ async function handleUserStats(
       .setFooter({
         text: "Stats reset whenever the bot restarts.",
       }),
+    true,
+  );
+}
+
+const EMBED_COLORS: Record<string, number> = {
+  blue: 0x5865f2,
+  green: 0x57f287,
+  yellow: 0xfee75c,
+  red: 0xed4245,
+  purple: 0x9b59b6,
+};
+
+async function handleEmbed(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const text = interaction.options.getString("message", true);
+  const title = interaction.options.getString("title") ?? "📢 Annonce";
+  const colorChoice = interaction.options.getString("color") ?? "blue";
+  const color = EMBED_COLORS[colorChoice] ?? COLOR_PRIMARY;
+
+  const channel = interaction.channel;
+  if (!channel || !("send" in channel)) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription("This channel doesn't support sending messages."),
+      true,
+    );
+    return;
+  }
+
+  const announcement = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(title)
+    .setDescription(text.replaceAll("\\n", "\n"))
+    .setFooter({
+      text: `Envoyé par ${interaction.user.tag}`,
+      iconURL: interaction.user.displayAvatarURL({ size: 64 }),
+    })
+    .setTimestamp();
+
+  await channel.send({ embeds: [announcement] });
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(COLOR_SUCCESS)
+      .setDescription("Embed posted."),
     true,
   );
 }
