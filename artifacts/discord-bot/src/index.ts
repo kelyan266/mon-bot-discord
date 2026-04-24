@@ -99,7 +99,11 @@ client.on(Events.MessageCreate, async (message) => {
       ? "Sending messages too quickly"
       : result.reason === "duplicate"
         ? "Repeating the same message"
-        : "Mass-mentioning users or roles";
+        : result.reason === "mass-mentions"
+          ? "Mass-mentioning users or roles"
+          : result.reason === "links"
+            ? "Suspicious link spam"
+            : "Suspicious activity (multiple spam signals)";
 
   try {
     if (message.deletable) {

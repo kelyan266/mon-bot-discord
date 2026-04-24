@@ -7,9 +7,12 @@ interface UserActivity {
 }
 
 const RATE_LIMIT_WINDOW_MS = 7_000;
-const RATE_LIMIT_MAX_MESSAGES = 6;
-const DUPLICATE_THRESHOLD = 3;
+const RATE_LIMIT_SOFT = 4;
+const RATE_LIMIT_HARD = 6;
+const DUPLICATE_SOFT = 2;
+const DUPLICATE_HARD = 3;
 const MASS_MENTION_THRESHOLD = 5;
+const SPAM_SCORE_THRESHOLD = 1.0;
 
 const activity = new Map<string, UserActivity>();
 
@@ -25,29 +28,26 @@ setInterval(
   60_000,
 ).unref();
 
-export type SpamReason = "rate" | "duplicate" | "mass-mentions";
+export type SpamReason =
+  | "rate"
+  | "duplicate"
+  | "mass-mentions"
+  | "links"
+  | "mixed";
 
 export interface SpamCheckResult {
   isSpam: boolean;
+  score: number;
   reason?: SpamReason;
   detail?: string;
 }
 
 export function checkSpam(message: Message): SpamCheckResult {
   if (!message.guild || message.author.bot) {
-    return { isSpam: false };
+    return { isSpam: false, score: 0 };
   }
 
-  const mentionCount =
-    message.mentions.users.size + message.mentions.roles.size;
-  if (mentionCount >= MASS_MENTION_THRESHOLD) {
-    return {
-      isSpam: true,
-      reason: "mass-mentions",
-      detail: `Mentioned ${mentionCount} users/roles in one message`,
-    };
-  }
-
+  const content = message.content;
   const key = `${message.guild.id}:${message.author.id}`;
   const now = Date.now();
   const entry: UserActivity = activity.get(key) ?? {
@@ -61,7 +61,7 @@ export function checkSpam(message: Message): SpamCheckResult {
   );
   entry.timestamps.push(now);
 
-  const normalized = message.content.trim().toLowerCase();
+  const normalized = content.trim().toLowerCase();
   if (normalized.length > 0 && normalized === entry.lastContent) {
     entry.duplicateCount += 1;
   } else {
@@ -71,23 +71,59 @@ export function checkSpam(message: Message): SpamCheckResult {
 
   activity.set(key, entry);
 
-  if (entry.timestamps.length > RATE_LIMIT_MAX_MESSAGES) {
-    return {
-      isSpam: true,
-      reason: "rate",
-      detail: `${entry.timestamps.length} messages in ${RATE_LIMIT_WINDOW_MS / 1000}s`,
-    };
+  let score = 0;
+  const contributors: SpamReason[] = [];
+  const details: string[] = [];
+
+  const mentionCount =
+    message.mentions.users.size + message.mentions.roles.size;
+  if (mentionCount >= MASS_MENTION_THRESHOLD) {
+    score += 1.0;
+    contributors.push("mass-mentions");
+    details.push(`${mentionCount} mentions`);
   }
 
-  if (entry.duplicateCount >= DUPLICATE_THRESHOLD) {
-    return {
-      isSpam: true,
-      reason: "duplicate",
-      detail: `Posted the same message ${entry.duplicateCount} times in a row`,
-    };
+  const burst = entry.timestamps.length;
+  if (burst >= RATE_LIMIT_HARD) {
+    score += 1.0;
+    contributors.push("rate");
+    details.push(`${burst} msgs in ${RATE_LIMIT_WINDOW_MS / 1000}s`);
+  } else if (burst >= RATE_LIMIT_SOFT) {
+    score += 0.4;
+    contributors.push("rate");
+    details.push(`${burst} msgs in ${RATE_LIMIT_WINDOW_MS / 1000}s`);
   }
 
-  return { isSpam: false };
+  if (entry.duplicateCount >= DUPLICATE_HARD) {
+    score += 1.0;
+    contributors.push("duplicate");
+    details.push(`${entry.duplicateCount}x repeat`);
+  } else if (entry.duplicateCount >= DUPLICATE_SOFT) {
+    score += 0.4;
+    contributors.push("duplicate");
+    details.push(`${entry.duplicateCount}x repeat`);
+  }
+
+  if (content.includes("http")) score += 0.3;
+  if (content.includes("http")) {
+    contributors.push("links");
+    details.push("contains link");
+  }
+
+  const isSpam = score >= SPAM_SCORE_THRESHOLD;
+  if (!isSpam) {
+    return { isSpam: false, score };
+  }
+
+  const reason: SpamReason =
+    contributors.length === 1 ? contributors[0]! : "mixed";
+
+  return {
+    isSpam: true,
+    score,
+    reason,
+    detail: `score ${score.toFixed(2)} · ${details.join(", ")}`,
+  };
 }
 
 export function resetActivity(guildId: string, userId: string): void {
