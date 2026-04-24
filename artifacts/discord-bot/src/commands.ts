@@ -234,6 +234,34 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "lock",
+      description: "Lock this channel so @everyone cannot send messages",
+      default_member_permissions: PermissionFlagsBits.ManageChannels.toString(),
+      dm_permission: false,
+      options: [
+        {
+          name: "reason",
+          description: "Reason for locking the channel",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+        },
+      ],
+    },
+    {
+      name: "unlock",
+      description: "Unlock this channel so @everyone can send messages again",
+      default_member_permissions: PermissionFlagsBits.ManageChannels.toString(),
+      dm_permission: false,
+      options: [
+        {
+          name: "reason",
+          description: "Reason for unlocking the channel",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+        },
+      ],
+    },
+    {
       name: "snipe",
       description: "Show the most recently deleted message in this channel",
       dm_permission: false,
@@ -369,6 +397,10 @@ export async function handleInteraction(
       return handleAutoRole(interaction);
     case "snipe":
       return handleSnipe(interaction);
+    case "lock":
+      return handleLock(interaction, true);
+    case "unlock":
+      return handleLock(interaction, false);
     default:
       await reply(
         interaction,
@@ -833,6 +865,78 @@ async function handleUserStats(
         text: "Stats reset whenever the bot restarts.",
       }),
     true,
+  );
+}
+
+async function handleLock(
+  interaction: ChatInputCommandInteraction,
+  lock: boolean,
+): Promise<void> {
+  const channel = interaction.channel;
+  const guild = interaction.guild;
+  if (!guild || !channel || !("permissionOverwrites" in channel)) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription(
+          "This channel doesn't support permission overwrites.",
+        ),
+      true,
+    );
+    return;
+  }
+  const me = guild.members.me;
+  if (
+    !me ||
+    !channel.permissionsFor(me)?.has(PermissionFlagsBits.ManageChannels)
+  ) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription(
+          "I need the **Manage Channels** permission in this channel.",
+        ),
+      true,
+    );
+    return;
+  }
+  const reason =
+    interaction.options.getString("reason") ??
+    (lock ? "No reason provided" : "Channel reopened");
+  try {
+    await channel.permissionOverwrites.edit(
+      guild.roles.everyone,
+      { SendMessages: lock ? false : null },
+      { reason: `${interaction.user.tag}: ${reason}` },
+    );
+  } catch (err) {
+    console.error("Lock/unlock failed:", err);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription("Failed to update channel permissions."),
+      true,
+    );
+    return;
+  }
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(lock ? COLOR_WARN : COLOR_SUCCESS)
+      .setTitle(lock ? "Channel locked" : "Channel unlocked")
+      .setDescription(
+        lock
+          ? `<#${channel.id}> is now read-only for @everyone.`
+          : `<#${channel.id}> is open again for @everyone.`,
+      )
+      .addFields(
+        { name: "Reason", value: reason },
+        { name: "Moderator", value: `<@${interaction.user.id}>` },
+      )
+      .setTimestamp(),
   );
 }
 
