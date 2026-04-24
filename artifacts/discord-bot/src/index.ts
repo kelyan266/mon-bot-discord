@@ -5,10 +5,12 @@ import {
   GatewayIntentBits,
   REST,
   Routes,
+  type Message,
 } from "discord.js";
 import { commandDefinitions, handleInteraction } from "./commands.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getWarnings } from "./storage.js";
+import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 if (!token) {
@@ -20,6 +22,9 @@ if (!token) {
 
 const SPAM_TIMEOUT_MINUTES = 5;
 const AUTO_WARN_THRESHOLD = 3;
+const TOXICITY_DELETE_THRESHOLD = 0.8;
+const TOXICITY_TIMEOUT_THRESHOLD = 0.95;
+const TOXICITY_TIMEOUT_MINUTES = 10;
 
 const client = new Client({
   intents: [
@@ -57,6 +62,9 @@ async function syncCommands(applicationId: string): Promise<void> {
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag} (id: ${c.user.id})`);
   console.log(`Serving ${c.guilds.cache.size} guild(s).`);
+  console.log(
+    `Toxicity detection: ${toxicityEnabled ? "enabled (gpt-5-nano)" : "disabled"}`,
+  );
   await syncCommands(c.user.id);
 });
 
@@ -92,6 +100,13 @@ client.on(Events.MessageCreate, async (message) => {
   }
 
   const result = checkSpam(message);
+
+  if (toxicityEnabled && message.content.trim().length > 0) {
+    void handleToxicity(message).catch((err) =>
+      console.error("Toxicity handler failed:", err),
+    );
+  }
+
   if (!result.isSpam) return;
 
   const reasonText =
@@ -163,6 +178,69 @@ client.on(Events.MessageCreate, async (message) => {
     console.error("Anti-spam handler failed:", err);
   }
 });
+
+async function handleToxicity(message: Message): Promise<void> {
+  if (!message.guild || !message.member) return;
+  const me = message.guild.members.me;
+  if (!me) return;
+
+  const toxicity = await analyzeWithAI(message.content);
+  if (toxicity > 0) {
+    console.log(
+      `${message.author.tag} -> toxicity: ${toxicity.toFixed(2)}`,
+    );
+  }
+
+  if (toxicity < TOXICITY_DELETE_THRESHOLD) return;
+
+  if (message.deletable) {
+    await message.delete().catch(() => undefined);
+  }
+
+  const channel = message.channel;
+  if (channel.isTextBased() && "send" in channel) {
+    await channel
+      .send(
+        `<@${message.author.id}>, message supprimé (toxique — score ${toxicity.toFixed(2)}).`,
+      )
+      .catch(() => undefined);
+  }
+
+  await addWarning({
+    guildId: message.guild.id,
+    userId: message.author.id,
+    moderatorId: client.user!.id,
+    reason: `Auto-mod: toxic message removed (score ${toxicity.toFixed(2)})`,
+  }).catch(() => undefined);
+
+  if (
+    toxicity >= TOXICITY_TIMEOUT_THRESHOLD &&
+    message.member.moderatable &&
+    message.member.roles.highest.position < me.roles.highest.position
+  ) {
+    await message.member
+      .timeout(
+        TOXICITY_TIMEOUT_MINUTES * 60 * 1000,
+        `Auto-mod: severe toxicity (score ${toxicity.toFixed(2)})`,
+      )
+      .catch(() => undefined);
+  }
+
+  const total = (await getWarnings(message.guild.id, message.author.id))
+    .length;
+  if (total >= AUTO_WARN_THRESHOLD && message.member.kickable) {
+    await message.member
+      .kick(`Auto-mod: reached ${AUTO_WARN_THRESHOLD} warnings.`)
+      .catch(() => undefined);
+    if (channel.isTextBased() && "send" in channel) {
+      await channel
+        .send(
+          `<@${message.author.id}> was kicked after reaching ${AUTO_WARN_THRESHOLD} warnings.`,
+        )
+        .catch(() => undefined);
+    }
+  }
+}
 
 client.on(Events.Error, (err) => {
   console.error("Discord client error:", err);

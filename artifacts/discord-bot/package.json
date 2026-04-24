@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "discord.js": "^14.26.3"
+    "discord.js": "^14.26.3",
+    "openai": "^6.34.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",

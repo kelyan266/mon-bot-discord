@@ -31,8 +31,11 @@ Long-running Node.js process (not a web artifact). Built with `discord.js` v14.
 
 Features:
 - Slash commands: `/ping`, `/kick`, `/ban`, `/unban`, `/timeout`, `/untimeout`, `/warn`, `/warnings`, `/clearwarnings`, `/delwarning`, `/purge`, `/slowmode`
-- Auto anti-spam: rate limit (6 msg / 7s), repeated message detection, mass-mention guard. Triggers a 5-minute timeout + persistent warning. After 3 auto-warnings the user is auto-kicked.
+- Auto anti-spam: weighted score (rate, duplicates, mass mentions, links). >= 1.0 triggers a 5-minute timeout + warning.
+- AI toxicity detection: every message is scored 0-1 by `gpt-5-nano` via Replit AI Integrations. Score >= 0.8 deletes the message + warns; score >= 0.95 also issues a 10-minute timeout. Cached for 5 min and skipped for messages under 8 chars.
+- After 3 total auto-warnings the user is auto-kicked.
 - Warnings persist to `artifacts/discord-bot/data/warnings.json` (gitignored).
+- Per-user runtime stats viewable with `/userstats`.
 
 Env vars / secrets:
 - `DISCORD_BOT_TOKEN` (secret, required)
