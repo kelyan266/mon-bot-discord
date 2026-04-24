@@ -110,6 +110,8 @@ export function checkSpam(message: Message): SpamCheckResult {
     details.push("contains link");
   }
 
+  console.log(`${message.author.tag} -> score: ${score}`);
+
   const isSpam = score >= SPAM_SCORE_THRESHOLD;
   if (!isSpam) {
     return { isSpam: false, score };
