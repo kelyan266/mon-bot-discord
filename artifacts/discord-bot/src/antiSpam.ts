@@ -16,6 +16,26 @@ const SPAM_SCORE_THRESHOLD = 1.0;
 
 const activity = new Map<string, UserActivity>();
 
+interface UserStat {
+  messages: number;
+  totalScore: number;
+  spamHits: number;
+  lastSeen: number;
+}
+
+const userStats: Record<string, UserStat> = {};
+
+export function getUserStats(
+  guildId: string,
+  userId: string,
+): UserStat | undefined {
+  return userStats[`${guildId}:${userId}`];
+}
+
+export function getAllUserStats(): Record<string, UserStat> {
+  return userStats;
+}
+
 setInterval(
   () => {
     const cutoff = Date.now() - 60_000;
@@ -113,6 +133,19 @@ export function checkSpam(message: Message): SpamCheckResult {
   console.log(`${message.author.tag} -> score: ${score}`);
 
   const isSpam = score >= SPAM_SCORE_THRESHOLD;
+
+  const stat = userStats[key] ?? {
+    messages: 0,
+    totalScore: 0,
+    spamHits: 0,
+    lastSeen: 0,
+  };
+  stat.messages += 1;
+  stat.totalScore += score;
+  stat.lastSeen = now;
+  if (isSpam) stat.spamHits += 1;
+  userStats[key] = stat;
+
   if (!isSpam) {
     return { isSpam: false, score };
   }

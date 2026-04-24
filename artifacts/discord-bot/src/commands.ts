@@ -12,6 +12,7 @@ import {
   getWarnings,
   removeWarning,
 } from "./storage.js";
+import { getUserStats } from "./antiSpam.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -214,6 +215,21 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "userstats",
+      description: "Show anti-spam stats for a member (since the bot started)",
+      default_member_permissions:
+        PermissionFlagsBits.ModerateMembers.toString(),
+      dm_permission: false,
+      options: [
+        {
+          name: "user",
+          description: "The member to look up",
+          type: ApplicationCommandOptionType.User,
+          required: true,
+        },
+      ],
+    },
+    {
       name: "slowmode",
       description: "Set the slowmode delay for this channel (0 to disable)",
       default_member_permissions:
@@ -306,6 +322,8 @@ export async function handleInteraction(
       return handlePurge(interaction);
     case "slowmode":
       return handleSlowmode(interaction);
+    case "userstats":
+      return handleUserStats(interaction);
     default:
       await reply(
         interaction,
@@ -723,6 +741,53 @@ async function handlePurge(
   }
   await interaction.editReply(
     `Deleted ${deleted} message(s)${userFilter ? ` from ${userFilter.tag}` : ""}.`,
+  );
+}
+
+async function handleUserStats(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const targetUser = interaction.options.getUser("user", true);
+  const stats = getUserStats(interaction.guild!.id, targetUser.id);
+  if (!stats) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle(`Stats for ${targetUser.tag}`)
+        .setDescription(
+          "No activity recorded for this user since the bot last started.",
+        ),
+      true,
+    );
+    return;
+  }
+  const avg =
+    stats.messages > 0 ? (stats.totalScore / stats.messages).toFixed(3) : "0";
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(COLOR_PRIMARY)
+      .setTitle(`Anti-spam stats for ${targetUser.tag}`)
+      .addFields(
+        { name: "Messages tracked", value: `${stats.messages}`, inline: true },
+        {
+          name: "Total spam score",
+          value: stats.totalScore.toFixed(2),
+          inline: true,
+        },
+        { name: "Avg score / msg", value: avg, inline: true },
+        { name: "Spam triggers", value: `${stats.spamHits}`, inline: true },
+        {
+          name: "Last seen",
+          value: `<t:${Math.floor(stats.lastSeen / 1000)}:R>`,
+          inline: true,
+        },
+      )
+      .setFooter({
+        text: "Stats reset whenever the bot restarts.",
+      }),
+    true,
   );
 }
 
