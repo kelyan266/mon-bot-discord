@@ -16,6 +16,7 @@ import {
   setAutoRole,
 } from "./storage.js";
 import { getUserStats } from "./antiSpam.js";
+import { getSnipe } from "./snipes.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -233,6 +234,11 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "snipe",
+      description: "Show the most recently deleted message in this channel",
+      dm_permission: false,
+    },
+    {
       name: "autorole",
       description:
         "Configure the role automatically given to new members on join",
@@ -361,6 +367,8 @@ export async function handleInteraction(
       return handleUserStats(interaction);
     case "autorole":
       return handleAutoRole(interaction);
+    case "snipe":
+      return handleSnipe(interaction);
     default:
       await reply(
         interaction,
@@ -826,6 +834,53 @@ async function handleUserStats(
       }),
     true,
   );
+}
+
+async function handleSnipe(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const channel = interaction.channel;
+  if (!channel) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription("This command must be used in a channel."),
+      true,
+    );
+    return;
+  }
+  const snipe = getSnipe(channel.id);
+  if (!snipe) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setDescription("Nothing to snipe in this channel (within the last hour)."),
+      true,
+    );
+    return;
+  }
+  const embed = new EmbedBuilder()
+    .setColor(COLOR_PRIMARY)
+    .setAuthor({
+      name: snipe.authorTag,
+      iconURL: snipe.authorAvatar ?? undefined,
+    })
+    .setDescription(snipe.content || "*(no text content)*")
+    .setFooter({ text: `Deleted` })
+    .setTimestamp(snipe.deletedAt);
+  if (snipe.attachments.length > 0) {
+    embed.addFields({
+      name: `Attachment${snipe.attachments.length > 1 ? "s" : ""}`,
+      value: snipe.attachments.join("\n"),
+    });
+    const firstImage = snipe.attachments.find((url) =>
+      /\.(png|jpe?g|gif|webp)(\?|$)/i.test(url),
+    );
+    if (firstImage) embed.setImage(firstImage);
+  }
+  await reply(interaction, embed);
 }
 
 async function handleAutoRole(

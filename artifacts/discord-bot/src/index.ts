@@ -11,6 +11,7 @@ import { commandDefinitions, handleInteraction } from "./commands.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
+import { saveSnipe } from "./snipes.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 if (!token) {
@@ -242,6 +243,24 @@ async function handleToxicity(message: Message): Promise<void> {
     }
   }
 }
+
+client.on(Events.MessageDelete, (message) => {
+  try {
+    if (!message.guild || !message.author || message.author.bot) return;
+    if (!message.content && message.attachments.size === 0) return;
+    saveSnipe(message.channelId, {
+      authorId: message.author.id,
+      authorTag: message.author.tag,
+      authorAvatar: message.author.displayAvatarURL({ size: 128 }),
+      content: message.content ?? "",
+      attachments: message.attachments.map((a) => a.url),
+      deletedAt: Date.now(),
+      createdAt: message.createdTimestamp,
+    });
+  } catch (err) {
+    console.error("Snipe handler failed:", err);
+  }
+});
 
 client.on(Events.GuildMemberAdd, async (member) => {
   if (member.user.bot) return;
