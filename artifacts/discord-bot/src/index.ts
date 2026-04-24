@@ -25,6 +25,7 @@ const AUTO_WARN_THRESHOLD = 3;
 const TOXICITY_DELETE_THRESHOLD = 0.8;
 const TOXICITY_TIMEOUT_THRESHOLD = 0.95;
 const TOXICITY_TIMEOUT_MINUTES = 10;
+const AUTO_ROLE_NAME = "random";
 
 const client = new Client({
   intents: [
@@ -241,6 +242,32 @@ async function handleToxicity(message: Message): Promise<void> {
     }
   }
 }
+
+client.on(Events.GuildMemberAdd, async (member) => {
+  if (member.user.bot) return;
+  const role = member.guild.roles.cache.find(
+    (r) => r.name === AUTO_ROLE_NAME,
+  );
+  if (!role) {
+    console.log(
+      `Auto-role: "${AUTO_ROLE_NAME}" not found in ${member.guild.name}`,
+    );
+    return;
+  }
+  const me = member.guild.members.me;
+  if (!me || role.position >= me.roles.highest.position) {
+    console.log(
+      `Auto-role: cannot assign "${role.name}" — bot role is not high enough.`,
+    );
+    return;
+  }
+  try {
+    await member.roles.add(role, "Auto-role on join");
+    console.log(`${member.user.tag} a reçu le rôle ${role.name}`);
+  } catch (error) {
+    console.error("Auto-role error:", error);
+  }
+});
 
 client.on(Events.Error, (err) => {
   console.error("Discord client error:", err);
