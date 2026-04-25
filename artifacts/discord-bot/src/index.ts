@@ -96,9 +96,12 @@ client.on(Events.MessageCreate, async (message) => {
   if (!me) return;
   if (
     message.member.permissions.has("ManageMessages") ||
-    message.member.id === message.guild.ownerId ||
-    message.member.premiumSince !== null
+    message.member.id === message.guild.ownerId
   ) {
+    return;
+  }
+  if (message.member.premiumSince !== null) {
+    console.log("Booster détecté :", message.author.tag);
     return;
   }
 
