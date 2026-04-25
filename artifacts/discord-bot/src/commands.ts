@@ -27,6 +27,11 @@ import {
   getUserLevel,
   progressToNextLevel,
 } from "./levels.js";
+import {
+  listLevelRoles,
+  removeLevelRole,
+  setLevelRole,
+} from "./levelRoles.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -357,6 +362,55 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "levelrole",
+      description: "Manage role rewards granted automatically on level up",
+      default_member_permissions: PermissionFlagsBits.ManageRoles.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "set",
+          description: "Set the role to grant when a member reaches a level",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "level",
+              description: "Level threshold (1-1000)",
+              required: true,
+              min_value: 1,
+              max_value: 1000,
+            },
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Role to grant",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "remove",
+          description: "Remove the level reward for a given level",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "level",
+              description: "Level threshold to remove",
+              required: true,
+              min_value: 1,
+              max_value: 1000,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "list",
+          description: "List all configured level rewards",
+        },
+      ],
+    },
+    {
       name: "snipe",
       description: "Show the most recently deleted message in this channel",
       dm_permission: false,
@@ -508,6 +562,8 @@ export async function handleInteraction(
       return handleLevel(interaction);
     case "leaderboard":
       return handleLeaderboard(interaction);
+    case "levelrole":
+      return handleLevelRole(interaction);
     default:
       await reply(
         interaction,
@@ -975,6 +1031,109 @@ async function handleUserStats(
   );
 }
 
+async function handleLevelRole(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "set") {
+    const level = interaction.options.getInteger("level", true);
+    const role = interaction.options.getRole("role", true);
+
+    const me = guild.members.me;
+    if (!me) return;
+    const roleInGuild = guild.roles.cache.get(role.id);
+    if (roleInGuild && me.roles.highest.comparePositionTo(roleInGuild) <= 0) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("⚠️ Rôle trop élevé")
+          .setDescription(
+            `Mon rôle le plus haut doit être au-dessus de ${role} pour pouvoir l'attribuer.`,
+          ),
+        true,
+      );
+      return;
+    }
+    if (roleInGuild?.managed) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("⚠️ Rôle géré")
+          .setDescription(
+            `${role} est un rôle géré par une intégration et ne peut pas être attribué manuellement.`,
+          ),
+        true,
+      );
+      return;
+    }
+
+    await setLevelRole(guild.id, level, role.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Récompense configurée")
+        .setDescription(
+          `Les membres recevront ${role} en atteignant le **niveau ${level}**.`,
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "remove") {
+    const level = interaction.options.getInteger("level", true);
+    const removed = await removeLevelRole(guild.id, level);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(removed ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(removed ? "🗑️ Récompense supprimée" : "ℹ️ Aucune récompense")
+        .setDescription(
+          removed
+            ? `La récompense pour le niveau **${level}** a été retirée.`
+            : `Aucune récompense n'était configurée pour le niveau **${level}**.`,
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "list") {
+    const rewards = await listLevelRoles(guild.id);
+    if (rewards.length === 0) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_PRIMARY)
+          .setTitle("🎭 Récompenses de niveau")
+          .setDescription(
+            "Aucune récompense configurée. Utilise `/levelrole set` pour en ajouter.",
+          ),
+        true,
+      );
+      return;
+    }
+    const lines = rewards
+      .map((r) => `• Niveau **${r.level}** → <@&${r.roleId}>`)
+      .join("\n");
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🎭 Récompenses de niveau")
+        .setDescription(lines)
+        .setFooter({ text: `${rewards.length} récompense(s) configurée(s)` }),
+      true,
+    );
+    return;
+  }
+}
+
 async function handleLevel(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -1215,7 +1374,8 @@ async function handleHelp(
         name: "📈 Niveaux",
         value:
           "`/level` → Voir ton niveau et ta progression\n" +
-          "`/leaderboard` → Top 10 du serveur",
+          "`/leaderboard` → Top 10 du serveur\n" +
+          "`/levelrole set|remove|list` → Récompenses de rôle par niveau",
       },
       {
         name: "⚙️ Configuration",

@@ -16,6 +16,8 @@ import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
 import { saveSnipe } from "./snipes.js";
 import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
+import { getRolesUpToLevel } from "./levelRoles.js";
+import type { GuildMember } from "discord.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 if (!token) {
@@ -367,6 +369,7 @@ setInterval(() => {
             .send(`🎉 <@${userId}> est passé au **niveau ${result.level}** !`)
             .catch(() => undefined);
         }
+        await grantLevelRoles(member, result.level);
       })
       .catch((err) => console.error("Voice XP failed:", err));
   }
@@ -374,10 +377,49 @@ setInterval(() => {
 
 async function announceLevelUp(message: Message, level: number): Promise<void> {
   const channel = message.channel;
-  if (!channel.isTextBased() || !("send" in channel)) return;
-  await channel
-    .send(`🎉 <@${message.author.id}> est passé au **niveau ${level}** !`)
-    .catch(() => undefined);
+  if (channel.isTextBased() && "send" in channel) {
+    await channel
+      .send(`🎉 <@${message.author.id}> est passé au **niveau ${level}** !`)
+      .catch(() => undefined);
+  }
+  if (message.member) {
+    await grantLevelRoles(message.member, level);
+  }
+}
+
+async function grantLevelRoles(
+  member: GuildMember,
+  level: number,
+): Promise<void> {
+  try {
+    const rewards = await getRolesUpToLevel(member.guild.id, level);
+    if (rewards.length === 0) return;
+
+    const granted: string[] = [];
+    for (const { roleId } of rewards) {
+      if (member.roles.cache.has(roleId)) continue;
+      const role = member.guild.roles.cache.get(roleId);
+      if (!role) continue;
+      const me = member.guild.members.me;
+      if (!me || me.roles.highest.comparePositionTo(role) <= 0) continue;
+      try {
+        await member.roles.add(role, `Level reward (level ${level})`);
+        granted.push(role.name);
+      } catch (err) {
+        console.error(`Failed to grant role ${role.name}:`, err);
+      }
+    }
+
+    if (granted.length > 0) {
+      member
+        .send(
+          `🎭 Tu as reçu ${granted.length === 1 ? "le rôle" : "les rôles"} **${granted.join("**, **")}** pour le niveau ${level} sur **${member.guild.name}** !`,
+        )
+        .catch(() => undefined);
+    }
+  } catch (err) {
+    console.error("grantLevelRoles failed:", err);
+  }
 }
 
 client.on(Events.Error, (err) => {
