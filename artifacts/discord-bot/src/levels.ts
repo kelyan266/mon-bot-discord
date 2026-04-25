@@ -139,6 +139,74 @@ function applyXp(entry: LevelEntry, gained: number): XpGainResult {
   };
 }
 
+export async function adjustXp(
+  guildId: string,
+  userId: string,
+  delta: number,
+): Promise<XpGainResult> {
+  const db = await ensureLoaded();
+  const entry = getEntry(db, guildId, userId);
+  const previousLevel = entry.level;
+  entry.xp = Math.max(0, entry.xp + delta);
+  const newLevel = levelFromXp(entry.xp);
+  entry.level = newLevel;
+  dirty = true;
+  await flush();
+  return {
+    gained: delta,
+    totalXp: entry.xp,
+    level: newLevel,
+    leveledUp: newLevel > previousLevel,
+    previousLevel,
+  };
+}
+
+export async function setXp(
+  guildId: string,
+  userId: string,
+  xp: number,
+): Promise<XpGainResult> {
+  const db = await ensureLoaded();
+  const entry = getEntry(db, guildId, userId);
+  const previousLevel = entry.level;
+  entry.xp = Math.max(0, xp);
+  const newLevel = levelFromXp(entry.xp);
+  entry.level = newLevel;
+  dirty = true;
+  await flush();
+  return {
+    gained: 0,
+    totalXp: entry.xp,
+    level: newLevel,
+    leveledUp: newLevel > previousLevel,
+    previousLevel,
+  };
+}
+
+export async function resetUserXp(
+  guildId: string,
+  userId: string,
+): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = db.users[guildId];
+  if (!guild || !guild[userId]) return false;
+  delete guild[userId];
+  dirty = true;
+  await flush();
+  return true;
+}
+
+export async function resetGuildXp(guildId: string): Promise<number> {
+  const db = await ensureLoaded();
+  const guild = db.users[guildId];
+  if (!guild) return 0;
+  const count = Object.keys(guild).length;
+  delete db.users[guildId];
+  dirty = true;
+  await flush();
+  return count;
+}
+
 export async function getUserLevel(
   guildId: string,
   userId: string,

@@ -22,10 +22,14 @@ import {
   getChannelStatsSummary,
 } from "./channelStats.js";
 import {
+  adjustXp,
   getLeaderboard,
   getRank,
   getUserLevel,
   progressToNextLevel,
+  resetGuildXp,
+  resetUserXp,
+  setXp,
 } from "./levels.js";
 import {
   listLevelRoles,
@@ -362,6 +366,97 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "xp",
+      description: "Admin: manually adjust a member's XP",
+      default_member_permissions:
+        PermissionFlagsBits.ManageGuild.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "give",
+          description: "Add XP to a member",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "user",
+              description: "Member to give XP to",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "amount",
+              description: "Amount of XP to add",
+              required: true,
+              min_value: 1,
+              max_value: 1_000_000,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "take",
+          description: "Remove XP from a member",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "user",
+              description: "Member to remove XP from",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "amount",
+              description: "Amount of XP to remove",
+              required: true,
+              min_value: 1,
+              max_value: 1_000_000,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "set",
+          description: "Set a member's XP to an exact value",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "user",
+              description: "Member to update",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "amount",
+              description: "Total XP value",
+              required: true,
+              min_value: 0,
+              max_value: 100_000_000,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "reset",
+          description: "Reset XP for a member or the entire server",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "user",
+              description: "Member to reset (omit to reset the entire server)",
+              required: false,
+            },
+            {
+              type: ApplicationCommandOptionType.Boolean,
+              name: "confirm_server",
+              description: "Set true to confirm wiping XP for the whole server",
+              required: false,
+            },
+          ],
+        },
+      ],
+    },
+    {
       name: "levelrole",
       description: "Manage role rewards granted automatically on level up",
       default_member_permissions: PermissionFlagsBits.ManageRoles.toString(),
@@ -564,6 +659,8 @@ export async function handleInteraction(
       return handleLeaderboard(interaction);
     case "levelrole":
       return handleLevelRole(interaction);
+    case "xp":
+      return handleXp(interaction);
     default:
       await reply(
         interaction,
@@ -1031,6 +1128,127 @@ async function handleUserStats(
   );
 }
 
+async function handleXp(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "give" || sub === "take") {
+    const target = interaction.options.getUser("user", true);
+    const amount = interaction.options.getInteger("amount", true);
+    if (target.bot) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("⚠️ Cible invalide")
+          .setDescription("Les bots ne peuvent pas avoir d'XP."),
+        true,
+      );
+      return;
+    }
+    const delta = sub === "give" ? amount : -amount;
+    const result = await adjustXp(guild.id, target.id, delta);
+    const sign = sub === "give" ? "+" : "−";
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle(sub === "give" ? "✅ XP ajoutée" : "✅ XP retirée")
+        .setDescription(
+          `${sign}**${amount.toLocaleString("fr-FR")} XP** appliqué à <@${target.id}>.\n` +
+            `Total : **${result.totalXp.toLocaleString("fr-FR")} XP** · Niveau **${result.level}**` +
+            (result.leveledUp
+              ? `\n🎉 Passage du niveau ${result.previousLevel} au niveau ${result.level} !`
+              : result.level < result.previousLevel
+                ? `\n📉 Redescendu du niveau ${result.previousLevel} au niveau ${result.level}.`
+                : ""),
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "set") {
+    const target = interaction.options.getUser("user", true);
+    const amount = interaction.options.getInteger("amount", true);
+    if (target.bot) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("⚠️ Cible invalide")
+          .setDescription("Les bots ne peuvent pas avoir d'XP."),
+        true,
+      );
+      return;
+    }
+    const result = await setXp(guild.id, target.id, amount);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ XP définie")
+        .setDescription(
+          `<@${target.id}> est maintenant à **${result.totalXp.toLocaleString("fr-FR")} XP** · Niveau **${result.level}**.`,
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "reset") {
+    const target = interaction.options.getUser("user");
+    const confirmServer =
+      interaction.options.getBoolean("confirm_server") ?? false;
+
+    if (target) {
+      const removed = await resetUserXp(guild.id, target.id);
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(removed ? COLOR_SUCCESS : COLOR_WARN)
+          .setTitle(removed ? "🗑️ XP réinitialisée" : "ℹ️ Rien à réinitialiser")
+          .setDescription(
+            removed
+              ? `L'XP de <@${target.id}> a été remise à zéro.`
+              : `<@${target.id}> n'avait pas encore d'XP.`,
+          ),
+        true,
+      );
+      return;
+    }
+
+    if (!confirmServer) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setTitle("⚠️ Confirmation requise")
+          .setDescription(
+            "Pour réinitialiser l'XP de **tout le serveur**, relance la commande avec `confirm_server: true`. Cette action est irréversible.",
+          ),
+        true,
+      );
+      return;
+    }
+
+    const count = await resetGuildXp(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("🗑️ XP du serveur réinitialisée")
+        .setDescription(
+          `L'XP de **${count}** membre(s) a été remise à zéro sur **${guild.name}**.`,
+        ),
+      true,
+    );
+    return;
+  }
+}
+
 async function handleLevelRole(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -1375,7 +1593,8 @@ async function handleHelp(
         value:
           "`/level` → Voir ton niveau et ta progression\n" +
           "`/leaderboard` → Top 10 du serveur\n" +
-          "`/levelrole set|remove|list` → Récompenses de rôle par niveau",
+          "`/levelrole set|remove|list` → Récompenses de rôle par niveau\n" +
+          "`/xp give|take|set|reset` → Admin : ajuster l'XP d'un membre",
       },
       {
         name: "⚙️ Configuration",
