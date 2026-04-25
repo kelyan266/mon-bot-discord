@@ -12,6 +12,7 @@ import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
 import { saveSnipe } from "./snipes.js";
+import { recordChannelMessage } from "./channelStats.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 if (!token) {
@@ -91,6 +92,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(Events.MessageCreate, async (message) => {
   if (!message.guild || message.author.bot || !message.member) return;
+
+  recordChannelMessage(message.guild.id, message.channelId);
 
   const me = message.guild.members.me;
   if (!me) return;

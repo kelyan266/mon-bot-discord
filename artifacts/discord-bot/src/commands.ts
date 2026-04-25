@@ -17,6 +17,10 @@ import {
 } from "./storage.js";
 import { getUserStats } from "./antiSpam.js";
 import { getSnipe } from "./snipes.js";
+import {
+  getChannelStats,
+  getChannelStatsSummary,
+} from "./channelStats.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -322,6 +326,13 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "channelstats",
+      description: "Show the most active channels in this server (since startup)",
+      default_member_permissions:
+        PermissionFlagsBits.ModerateMembers.toString(),
+      dm_permission: false,
+    },
+    {
       name: "snipe",
       description: "Show the most recently deleted message in this channel",
       dm_permission: false,
@@ -467,6 +478,8 @@ export async function handleInteraction(
       return handleHelp(interaction);
     case "dm":
       return handleDm(interaction);
+    case "channelstats":
+      return handleChannelStats(interaction);
     default:
       await reply(
         interaction,
@@ -934,6 +947,49 @@ async function handleUserStats(
   );
 }
 
+async function handleChannelStats(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const list = getChannelStats(guild.id);
+  const summary = getChannelStatsSummary(guild.id);
+
+  if (list.length === 0) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("📊 Channel activity")
+        .setDescription("No messages tracked yet since the bot started."),
+      true,
+    );
+    return;
+  }
+
+  const top = list.slice(0, 10);
+  const lines = top
+    .map((c, i) => {
+      const channel = guild.channels.cache.get(c.channelId);
+      const name = channel ? `<#${c.channelId}>` : `\`${c.channelId}\``;
+      const last = `<t:${Math.floor(c.lastSeen / 1000)}:R>`;
+      return `**${i + 1}.** ${name} — **${c.count}** msgs · last ${last}`;
+    })
+    .join("\n");
+
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(COLOR_PRIMARY)
+      .setTitle("📊 Channel activity")
+      .setDescription(lines)
+      .setFooter({
+        text: `${summary.totalMessages} total messages across ${summary.activeChannels} channel(s) since the bot last started.`,
+      })
+      .setTimestamp(),
+    true,
+  );
+}
+
 async function handleDm(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -1033,6 +1089,7 @@ async function handleHelp(
         value:
           "`/snipe` → Voir le dernier message supprimé\n" +
           "`/userstats` → Stats anti-spam d'un membre\n" +
+          "`/channelstats` → Top salons les plus actifs\n" +
           "`/ping` → Vérifier la latence du bot",
       },
       {
