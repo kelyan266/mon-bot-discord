@@ -34,6 +34,7 @@ Features:
 - `/snipe` shows the last deleted message in the current channel. Stored in-memory per channel with a 1-hour TTL.
 - Auto-role on join: configurable per server via `/autorole set @role`. Persisted to `data/autoRoles.json`. Falls back to a role literally named `random` if nothing is configured.
 - Auto anti-spam: weighted score (rate, duplicates, mass mentions, links). >= 1.0 triggers a 5-minute timeout + warning.
+- Auto-mod exemptions: server owner, members with Manage Messages, and Nitro server boosters (`member.premiumSince !== null`) are skipped by both anti-spam and toxicity detection.
 - AI toxicity detection: every message is scored 0-1 by `gpt-5-nano` via Replit AI Integrations. Score >= 0.8 deletes the message + warns; score >= 0.95 also issues a 10-minute timeout. Cached for 5 min and skipped for messages under 8 chars.
 - After 3 total auto-warnings the user is auto-kicked.
 - Warnings persist to `artifacts/discord-bot/data/warnings.json` (gitignored).

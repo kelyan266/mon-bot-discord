@@ -96,7 +96,8 @@ client.on(Events.MessageCreate, async (message) => {
   if (!me) return;
   if (
     message.member.permissions.has("ManageMessages") ||
-    message.member.id === message.guild.ownerId
+    message.member.id === message.guild.ownerId ||
+    message.member.premiumSince !== null
   ) {
     return;
   }
