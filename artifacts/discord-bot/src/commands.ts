@@ -234,6 +234,27 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "dm",
+      description: "Send a direct message to a member as the server",
+      default_member_permissions:
+        PermissionFlagsBits.ManageMessages.toString(),
+      dm_permission: false,
+      options: [
+        {
+          name: "user",
+          description: "The member to DM",
+          type: ApplicationCommandOptionType.User,
+          required: true,
+        },
+        {
+          name: "message",
+          description: "The message to send",
+          type: ApplicationCommandOptionType.String,
+          required: true,
+        },
+      ],
+    },
+    {
       name: "help",
       description: "Show the list of available commands",
       dm_permission: false,
@@ -444,6 +465,8 @@ export async function handleInteraction(
       return handleEmbed(interaction);
     case "help":
       return handleHelp(interaction);
+    case "dm":
+      return handleDm(interaction);
     default:
       await reply(
         interaction,
@@ -911,6 +934,71 @@ async function handleUserStats(
   );
 }
 
+async function handleDm(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const targetUser = interaction.options.getUser("user", true);
+  const text = interaction.options.getString("message", true);
+
+  if (targetUser.bot) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription("You cannot DM a bot."),
+      true,
+    );
+    return;
+  }
+  if (targetUser.id === interaction.user.id) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription("You cannot DM yourself through the bot."),
+      true,
+    );
+    return;
+  }
+
+  const guild = interaction.guild!;
+  const dmEmbed = new EmbedBuilder()
+    .setColor(COLOR_PRIMARY)
+    .setAuthor({
+      name: `Message du serveur ${guild.name}`,
+      iconURL: guild.iconURL({ size: 128 }) ?? undefined,
+    })
+    .setDescription(text.replaceAll("\\n", "\n"))
+    .setFooter({ text: `Envoyé par ${interaction.user.tag}` })
+    .setTimestamp();
+
+  try {
+    await targetUser.send({ embeds: [dmEmbed] });
+  } catch {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription(
+          `Impossible d'envoyer le message à ${targetUser.tag} (DM fermés ?)`,
+        ),
+      true,
+    );
+    return;
+  }
+
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(COLOR_SUCCESS)
+      .setTitle("DM envoyé")
+      .setDescription(`Message envoyé à <@${targetUser.id}>.`)
+      .addFields({ name: "Contenu", value: text.slice(0, 1024) })
+      .setTimestamp(),
+    true,
+  );
+}
+
 async function handleHelp(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -956,7 +1044,9 @@ async function handleHelp(
       },
       {
         name: "🎨 Autres",
-        value: "`/embed` → Envoyer une annonce stylée",
+        value:
+          "`/embed` → Envoyer une annonce stylée\n" +
+          "`/dm` → Envoyer un MP à un membre",
       },
       {
         name: "🤖 Auto-modération",
