@@ -21,6 +21,12 @@ import {
   getChannelStats,
   getChannelStatsSummary,
 } from "./channelStats.js";
+import {
+  getLeaderboard,
+  getRank,
+  getUserLevel,
+  progressToNextLevel,
+} from "./levels.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -333,6 +339,24 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "level",
+      description: "Show your level and XP (or someone else's)",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "user",
+          description: "User to check",
+          required: false,
+        },
+      ],
+    },
+    {
+      name: "leaderboard",
+      description: "Show the top 10 members by XP",
+      dm_permission: false,
+    },
+    {
       name: "snipe",
       description: "Show the most recently deleted message in this channel",
       dm_permission: false,
@@ -480,6 +504,10 @@ export async function handleInteraction(
       return handleDm(interaction);
     case "channelstats":
       return handleChannelStats(interaction);
+    case "level":
+      return handleLevel(interaction);
+    case "leaderboard":
+      return handleLeaderboard(interaction);
     default:
       await reply(
         interaction,
@@ -947,6 +975,97 @@ async function handleUserStats(
   );
 }
 
+async function handleLevel(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const target = interaction.options.getUser("user") ?? interaction.user;
+  const guildId = interaction.guild!.id;
+  const entry = await getUserLevel(guildId, target.id);
+
+  if (!entry || entry.xp === 0) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("📈 Niveau")
+        .setDescription(
+          `**${target.tag}** n'a encore gagné aucune XP. Envoie des messages ou parle en vocal pour commencer !`,
+        ),
+      true,
+    );
+    return;
+  }
+
+  const progress = progressToNextLevel(entry.xp);
+  const rank = await getRank(guildId, target.id);
+  const filled = Math.round(progress.percent / 5);
+  const bar = "▰".repeat(filled) + "▱".repeat(20 - filled);
+
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(COLOR_SUCCESS)
+      .setTitle(`📈 Niveau de ${target.username}`)
+      .setThumbnail(target.displayAvatarURL())
+      .addFields(
+        { name: "Niveau", value: `**${progress.level}**`, inline: true },
+        {
+          name: "XP totale",
+          value: `**${entry.xp.toLocaleString("fr-FR")}**`,
+          inline: true,
+        },
+        {
+          name: "Rang",
+          value: rank ? `**#${rank}**` : "—",
+          inline: true,
+        },
+        {
+          name: `Progression — ${progress.currentLevelXp} / ${progress.totalForNext} XP`,
+          value: `${bar} **${progress.percent}%**\nIl reste **${progress.neededForNext}** XP avant le niveau ${progress.level + 1}.`,
+        },
+      ),
+    true,
+  );
+}
+
+async function handleLeaderboard(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const entries = await getLeaderboard(guild.id, 10);
+
+  if (entries.length === 0) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🏆 Classement XP")
+        .setDescription("Personne n'a encore gagné d'XP sur ce serveur."),
+      true,
+    );
+    return;
+  }
+
+  const medals = ["🥇", "🥈", "🥉"];
+  const lines = entries
+    .map((e, i) => {
+      const prefix = medals[i] ?? `**${i + 1}.**`;
+      return `${prefix} <@${e.userId}> — Niveau **${e.level}** · ${e.xp.toLocaleString("fr-FR")} XP`;
+    })
+    .join("\n");
+
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(COLOR_PRIMARY)
+      .setTitle("🏆 Classement XP")
+      .setDescription(lines)
+      .setFooter({ text: `Top ${entries.length} sur ${guild.name}` })
+      .setTimestamp(),
+    false,
+  );
+}
+
 async function handleChannelStats(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -1091,6 +1210,12 @@ async function handleHelp(
           "`/userstats` → Stats anti-spam d'un membre\n" +
           "`/channelstats` → Top salons les plus actifs\n" +
           "`/ping` → Vérifier la latence du bot",
+      },
+      {
+        name: "📈 Niveaux",
+        value:
+          "`/level` → Voir ton niveau et ta progression\n" +
+          "`/leaderboard` → Top 10 du serveur",
       },
       {
         name: "⚙️ Configuration",

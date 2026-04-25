@@ -1,4 +1,5 @@
 import {
+  ChannelType,
   Client,
   EmbedBuilder,
   Events,
@@ -6,6 +7,7 @@ import {
   REST,
   Routes,
   type Message,
+  type VoiceState,
 } from "discord.js";
 import { commandDefinitions, handleInteraction } from "./commands.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
@@ -13,6 +15,7 @@ import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
 import { saveSnipe } from "./snipes.js";
 import { recordChannelMessage } from "./channelStats.js";
+import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 if (!token) {
@@ -34,6 +37,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.MessageContent,
   ],
 });
@@ -94,6 +98,12 @@ client.on(Events.MessageCreate, async (message) => {
   if (!message.guild || message.author.bot || !message.member) return;
 
   recordChannelMessage(message.guild.id, message.channelId);
+
+  void addMessageXp(message.guild.id, message.author.id)
+    .then((result) => {
+      if (result?.leveledUp) announceLevelUp(message, result.level);
+    })
+    .catch((err) => console.error("Message XP failed:", err));
 
   const me = message.guild.members.me;
   if (!me) return;
@@ -300,17 +310,92 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 });
 
+interface VoiceSession {
+  guildId: string;
+  channelId: string;
+}
+const voiceSessions = new Map<string, VoiceSession>();
+
+function isEligibleVoiceState(state: VoiceState): boolean {
+  if (!state.channelId || !state.guild) return false;
+  if (state.member?.user.bot) return false;
+  if (state.selfDeaf || state.deaf || state.selfMute || state.mute) return false;
+  const channel = state.channel;
+  if (!channel) return false;
+  if (
+    channel.type !== ChannelType.GuildVoice &&
+    channel.type !== ChannelType.GuildStageVoice
+  ) {
+    return false;
+  }
+  const humans = channel.members.filter((m) => !m.user.bot).size;
+  return humans >= 2;
+}
+
+client.on(Events.VoiceStateUpdate, (oldState, newState) => {
+  const userId = newState.id;
+  if (newState.member?.user.bot) {
+    voiceSessions.delete(userId);
+    return;
+  }
+  if (isEligibleVoiceState(newState)) {
+    voiceSessions.set(userId, {
+      guildId: newState.guild.id,
+      channelId: newState.channelId!,
+    });
+  } else {
+    voiceSessions.delete(userId);
+  }
+  void oldState;
+});
+
+setInterval(() => {
+  for (const [userId, session] of voiceSessions) {
+    const guild = client.guilds.cache.get(session.guildId);
+    if (!guild) continue;
+    const member = guild.members.cache.get(userId);
+    if (!member || !isEligibleVoiceState(member.voice)) {
+      voiceSessions.delete(userId);
+      continue;
+    }
+    addVoiceXp(session.guildId, userId)
+      .then(async (result) => {
+        if (!result.leveledUp) return;
+        const channel = guild.channels.cache.get(session.channelId);
+        if (channel?.isTextBased() && "send" in channel) {
+          await channel
+            .send(`🎉 <@${userId}> est passé au **niveau ${result.level}** !`)
+            .catch(() => undefined);
+        }
+      })
+      .catch((err) => console.error("Voice XP failed:", err));
+  }
+}, 60_000).unref();
+
+async function announceLevelUp(message: Message, level: number): Promise<void> {
+  const channel = message.channel;
+  if (!channel.isTextBased() || !("send" in channel)) return;
+  await channel
+    .send(`🎉 <@${message.author.id}> est passé au **niveau ${level}** !`)
+    .catch(() => undefined);
+}
+
 client.on(Events.Error, (err) => {
   console.error("Discord client error:", err);
 });
 
 process.on("SIGTERM", () => {
   console.log("SIGTERM received, shutting down...");
-  client.destroy().finally(() => process.exit(0));
+  shutdownFlush()
+    .catch((err) => console.error("Final flush failed:", err))
+    .finally(() => client.destroy().finally(() => process.exit(0)));
 });
 
 process.on("SIGINT", () => {
   console.log("SIGINT received, shutting down...");
+  void shutdownFlush().catch((err) =>
+    console.error("Final flush failed:", err),
+  );
   client.destroy().finally(() => process.exit(0));
 });
 

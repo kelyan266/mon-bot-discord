@@ -30,7 +30,8 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 Long-running Node.js process (not a web artifact). Built with `discord.js` v14.
 
 Features:
-- Slash commands: `/ping`, `/kick`, `/ban`, `/unban`, `/timeout`, `/untimeout`, `/warn`, `/warnings`, `/clearwarnings`, `/delwarning`, `/purge`, `/slowmode`, `/userstats`, `/autorole set|clear|show`, `/snipe`, `/lock`, `/unlock`, `/embed`, `/help`, `/dm`, `/channelstats`
+- Slash commands: `/ping`, `/kick`, `/ban`, `/unban`, `/timeout`, `/untimeout`, `/warn`, `/warnings`, `/clearwarnings`, `/delwarning`, `/purge`, `/slowmode`, `/userstats`, `/autorole set|clear|show`, `/snipe`, `/lock`, `/unlock`, `/embed`, `/help`, `/dm`, `/channelstats`, `/level`, `/leaderboard`
+- Levels/XP system: 15-25 XP per message (60s cooldown per user), 10 XP/min in voice (when ≥2 humans, not muted/deafened). Persisted to `data/levels.json` (debounced flush every 30s + on shutdown). Level-ups announced in the active channel. Formula: `xpForNextLevel(L) = 5L² + 50L + 100` (Mee6-style).
 - `/snipe` shows the last deleted message in the current channel. Stored in-memory per channel with a 1-hour TTL.
 - Auto-role on join: configurable per server via `/autorole set @role`. Persisted to `data/autoRoles.json`. Falls back to a role literally named `random` if nothing is configured.
 - Auto anti-spam: weighted score (rate, duplicates, mass mentions, links). >= 1.0 triggers a 5-minute timeout + warning.
