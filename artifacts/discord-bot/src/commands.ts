@@ -371,6 +371,27 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "setavatar",
+      description: "Change the bot's profile picture (global — 2 changes/hour max)",
+      default_member_permissions:
+        PermissionFlagsBits.Administrator.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Attachment,
+          name: "image",
+          description: "Image file to use (PNG, JPG, GIF)",
+          required: false,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "url",
+          description: "Public URL of the image to use",
+          required: false,
+        },
+      ],
+    },
+    {
       name: "levels",
       description: "Enable or disable the XP/levels system on this server",
       default_member_permissions:
@@ -718,6 +739,8 @@ export async function handleInteraction(
       return handleAutomod(interaction);
     case "levels":
       return handleLevelsToggle(interaction);
+    case "setavatar":
+      return handleSetAvatar(interaction);
     default:
       await reply(
         interaction,
@@ -1183,6 +1206,82 @@ async function handleUserStats(
       }),
     true,
   );
+}
+
+async function handleSetAvatar(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const attachment = interaction.options.getAttachment("image");
+  const urlOption = interaction.options.getString("url");
+
+  if (!attachment && !urlOption) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setTitle("⚠️ Paramètre manquant")
+        .setDescription(
+          "Fournis une pièce jointe (`image`) ou une URL (`url`).",
+        ),
+      true,
+    );
+    return;
+  }
+
+  const imageUrl = attachment?.url ?? urlOption!;
+  const ALLOWED = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+  if (attachment && !ALLOWED.includes(attachment.contentType ?? "")) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setTitle("⚠️ Format non supporté")
+        .setDescription("Utilise un fichier PNG, JPG, GIF ou WEBP."),
+      true,
+    );
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    const res = await fetch(imageUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const contentType = res.headers.get("content-type") ?? "image/png";
+    if (!ALLOWED.some((t) => contentType.startsWith(t.split("/")[0]!))) {
+      throw new Error("Type de contenu non supporté");
+    }
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const mime = contentType.split(";")[0]!.trim();
+    const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
+
+    await interaction.client.user.setAvatar(dataUrl);
+
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Photo de profil mise à jour")
+          .setDescription(
+            "La nouvelle photo de profil du bot est active.\n⚠️ Discord limite les changements à **2 par heure**.",
+          )
+          .setThumbnail(interaction.client.user.displayAvatarURL()),
+      ],
+    });
+  } catch (err) {
+    const msg =
+      err instanceof Error ? err.message : "Erreur inconnue";
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("❌ Échec du changement")
+          .setDescription(
+            `Impossible de mettre à jour la photo de profil.\n\`${msg}\``,
+          ),
+      ],
+    });
+  }
 }
 
 async function handleLevelsToggle(
@@ -1766,6 +1865,7 @@ async function handleHelp(
       {
         name: "⚙️ Configuration",
         value:
+          "`/setavatar` → Changer la photo de profil du bot\n" +
           "`/levels enable|disable|status` → Activer/désactiver le système d'XP\n" +
           "`/automod enable|disable|status` → Activer/désactiver l'automod\n" +
           "`/autorole set` → Rôle auto à l'arrivée\n" +
