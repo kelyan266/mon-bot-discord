@@ -9,6 +9,7 @@ const FILE = path.join(DATA_DIR, "settings.json");
 interface GuildSettings {
   automodEnabled: boolean;
   xpEnabled: boolean;
+  botRoleId?: string;
 }
 
 interface SettingsDb {
@@ -79,6 +80,29 @@ export async function setXpEnabled(
   const db = await ensureLoaded();
   getGuild(db, guildId).xpEnabled = enabled;
   await persist();
+}
+
+export async function getBotRole(guildId: string): Promise<string | null> {
+  const db = await ensureLoaded();
+  return getGuild(db, guildId).botRoleId ?? null;
+}
+
+export async function setBotRole(
+  guildId: string,
+  roleId: string,
+): Promise<void> {
+  const db = await ensureLoaded();
+  getGuild(db, guildId).botRoleId = roleId;
+  await persist();
+}
+
+export async function clearBotRole(guildId: string): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  if (!guild.botRoleId) return false;
+  delete guild.botRoleId;
+  await persist();
+  return true;
 }
 
 export async function getGuildSettings(

@@ -37,7 +37,10 @@ import {
   setLevelRole,
 } from "./levelRoles.js";
 import {
+  clearBotRole,
+  getBotRole,
   getGuildSettings,
+  setBotRole,
   setAutomodEnabled,
   setXpEnabled,
 } from "./settings.js";
@@ -416,6 +419,38 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "botrole",
+      description: "Configure which role is required to use bot commands",
+      default_member_permissions:
+        PermissionFlagsBits.Administrator.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "set",
+          description: "Set the role required to use bot commands",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Role members must have to use any bot command",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "clear",
+          description: "Remove the restriction — everyone can use the bot",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "show",
+          description: "Show the currently required role",
+        },
+      ],
+    },
+    {
       name: "automod",
       description: "Enable or disable automatic moderation on this server",
       default_member_permissions:
@@ -681,9 +716,50 @@ async function reply(
   }
 }
 
+const BOTROLE_BYPASS_COMMANDS = new Set(["botrole", "help"]);
+
+async function checkBotRoleAccess(
+  interaction: ChatInputCommandInteraction,
+): Promise<boolean> {
+  if (!interaction.guild || !interaction.member) return true;
+  if (BOTROLE_BYPASS_COMMANDS.has(interaction.commandName)) return true;
+
+  const member = interaction.member;
+  if (
+    typeof member.permissions !== "string" &&
+    member.permissions.has("Administrator")
+  )
+    return true;
+  if (interaction.guild.ownerId === interaction.user.id) return true;
+
+  const requiredRoleId = await getBotRole(interaction.guild.id);
+  if (!requiredRoleId) return true;
+
+  const hasRole = Array.isArray(member.roles)
+    ? member.roles.includes(requiredRoleId)
+    : member.roles.cache.has(requiredRoleId);
+
+  if (!hasRole) {
+    const role = interaction.guild.roles.cache.get(requiredRoleId);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setTitle("🚫 Accès refusé")
+        .setDescription(
+          `Tu dois avoir le rôle ${role ? `<@&${requiredRoleId}>` : `\`${requiredRoleId}\``} pour utiliser les commandes du bot.`,
+        ),
+      true,
+    );
+    return false;
+  }
+  return true;
+}
+
 export async function handleInteraction(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
+  if (!(await checkBotRoleAccess(interaction))) return;
   switch (interaction.commandName) {
     case "ping":
       return handlePing(interaction);
@@ -741,6 +817,8 @@ export async function handleInteraction(
       return handleLevelsToggle(interaction);
     case "setavatar":
       return handleSetAvatar(interaction);
+    case "botrole":
+      return handleBotRole(interaction);
     default:
       await reply(
         interaction,
@@ -1346,6 +1424,77 @@ async function handleLevelsToggle(
   }
 }
 
+async function handleBotRole(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "set") {
+    const role = interaction.options.getRole("role", true);
+    if (role.managed) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("⚠️ Rôle non valide")
+          .setDescription(
+            `${role} est un rôle géré par une intégration et ne peut pas servir de restriction d'accès.`,
+          ),
+        true,
+      );
+      return;
+    }
+    await setBotRole(guild.id, role.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Rôle requis configuré")
+        .setDescription(
+          `Seuls les membres avec ${role} (et les administrateurs) pourront désormais utiliser les commandes du bot.\n\n` +
+            `Les commandes \`/botrole\` et \`/help\` restent accessibles à tous.`,
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "clear") {
+    const removed = await clearBotRole(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(removed ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(removed ? "✅ Restriction supprimée" : "ℹ️ Aucune restriction")
+        .setDescription(
+          removed
+            ? "Tout le monde peut à nouveau utiliser les commandes du bot."
+            : "Aucun rôle requis n'était configuré.",
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "show") {
+    const roleId = await getBotRole(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🔑 Rôle requis pour le bot")
+        .setDescription(
+          roleId
+            ? `Le rôle <@&${roleId}> est requis pour utiliser les commandes du bot.\nLes administrateurs et le propriétaire du serveur sont exemptés.`
+            : "Aucun rôle requis — tout le monde peut utiliser le bot.",
+        ),
+      true,
+    );
+    return;
+  }
+}
+
 async function handleAutomod(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -1872,6 +2021,7 @@ async function handleHelp(
       {
         name: "⚙️ Configuration",
         value:
+          "`/botrole set|clear|show` → Rôle requis pour utiliser le bot\n" +
           "`/setavatar` → Changer la photo de profil du bot\n" +
           "`/levels enable|disable|status` → Activer/désactiver le système d'XP\n" +
           "`/automod enable|disable|status` → Activer/désactiver l'automod\n" +
