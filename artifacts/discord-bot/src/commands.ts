@@ -1,11 +1,16 @@
 import {
+  ActionRowBuilder,
+  ActivityType,
   ApplicationCommandOptionType,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
   ChatInputCommandInteraction,
   EmbedBuilder,
   GuildMember,
   PermissionFlagsBits,
   PermissionsBitField,
+  UserFlags,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
   type TextChannel,
 } from "discord.js";
@@ -66,6 +71,37 @@ const COLOR_DANGER = 0xed4245;
 
 export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody[] =
   [
+    {
+      name: "avatar",
+      description: "Affiche l'avatar HD + bannière d'un membre",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "user",
+          description: "Membre (par défaut : toi)",
+          required: false,
+        },
+      ],
+    },
+    {
+      name: "serverinfo",
+      description: "Carte détaillée du serveur (boosts, membres, emojis, voix…)",
+      dm_permission: false,
+    },
+    {
+      name: "userinfo",
+      description: "Profil ultra détaillé d'un membre (badges, rôles, activités, perms…)",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "user",
+          description: "Membre (par défaut : toi)",
+          required: false,
+        },
+      ],
+    },
     {
       name: "ping",
       description: "Check that the bot is alive",
@@ -962,6 +998,12 @@ export async function handleInteraction(
 ): Promise<void> {
   if (!(await checkBotRoleAccess(interaction))) return;
   switch (interaction.commandName) {
+    case "avatar":
+      return handleAvatar(interaction);
+    case "serverinfo":
+      return handleServerInfo(interaction);
+    case "userinfo":
+      return handleUserInfo(interaction);
     case "ping":
       return handlePing(interaction);
     case "kick":
@@ -1033,6 +1075,336 @@ export async function handleInteraction(
         true,
       );
   }
+}
+
+const BADGE_MAP: Partial<Record<string, string>> = {
+  [String(UserFlags.Staff)]: "🏠 Discord Staff",
+  [String(UserFlags.Partner)]: "🤝 Partenaire",
+  [String(UserFlags.Hypesquad)]: "🎉 HypeSquad Events",
+  [String(UserFlags.BugHunterLevel1)]: "🐛 Bug Hunter",
+  [String(UserFlags.HypeSquadOnlineHouse1)]: "🧡 HypeSquad Bravery",
+  [String(UserFlags.HypeSquadOnlineHouse2)]: "💜 HypeSquad Brilliance",
+  [String(UserFlags.HypeSquadOnlineHouse3)]: "💚 HypeSquad Balance",
+  [String(UserFlags.PremiumEarlySupporter)]: "🌟 Early Supporter",
+  [String(UserFlags.BugHunterLevel2)]: "🏅 Bug Hunter Gold",
+  [String(UserFlags.VerifiedDeveloper)]: "🤖 Verified Bot Dev",
+  [String(UserFlags.CertifiedModerator)]: "🛡️ Certifié Modérateur",
+  [String(UserFlags.ActiveDeveloper)]: "👨‍💻 Développeur Actif",
+};
+
+const ACTIVITY_EMOJI: Partial<Record<number, string>> = {
+  [ActivityType.Playing]: "🎮",
+  [ActivityType.Streaming]: "📺",
+  [ActivityType.Listening]: "🎧",
+  [ActivityType.Watching]: "👀",
+  [ActivityType.Custom]: "✨",
+  [ActivityType.Competing]: "🏆",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  online: "🟢 En ligne",
+  idle: "🌙 Absent",
+  dnd: "🔴 Ne pas déranger",
+  offline: "⚫ Hors ligne",
+  invisible: "⚫ Invisible",
+};
+
+const KEY_PERMS: [bigint, string][] = [
+  [PermissionFlagsBits.Administrator, "Administrateur"],
+  [PermissionFlagsBits.ManageGuild, "Gérer le serveur"],
+  [PermissionFlagsBits.ManageRoles, "Gérer les rôles"],
+  [PermissionFlagsBits.ManageChannels, "Gérer les salons"],
+  [PermissionFlagsBits.ManageMessages, "Gérer les messages"],
+  [PermissionFlagsBits.KickMembers, "Expulser des membres"],
+  [PermissionFlagsBits.BanMembers, "Bannir des membres"],
+  [PermissionFlagsBits.MentionEveryone, "Mentionner @everyone"],
+  [PermissionFlagsBits.ManageNicknames, "Gérer les pseudos"],
+  [PermissionFlagsBits.MuteMembers, "Mettre en sourdine"],
+  [PermissionFlagsBits.DeafenMembers, "Rendre sourd"],
+];
+
+function ts(date: Date): string {
+  return `<t:${Math.floor(date.getTime() / 1000)}:R> (<t:${Math.floor(date.getTime() / 1000)}:d>)`;
+}
+
+async function handleAvatar(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  await interaction.deferReply();
+  const guild = interaction.guild!;
+  const targetUser = interaction.options.getUser("user") ?? interaction.user;
+  const member = guild.members.cache.get(targetUser.id);
+
+  const fetchedUser = await interaction.client.users
+    .fetch(targetUser.id, { force: true })
+    .catch(() => targetUser);
+
+  const globalAvatarUrl = fetchedUser.displayAvatarURL({ size: 4096, extension: "png" });
+  const serverAvatarUrl = member?.displayAvatarURL({ size: 4096, extension: "png" });
+  const hasServerAvatar = serverAvatarUrl && serverAvatarUrl !== globalAvatarUrl;
+
+  const bannerUrl = fetchedUser.bannerURL({ size: 4096 });
+  const bannerColor = fetchedUser.accentColor;
+
+  const makeButtons = (url: string, label: string) => {
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    const isPng = !url.includes(".gif");
+    row.addComponents(
+      new ButtonBuilder()
+        .setLabel(`⬇️ ${label} PNG`)
+        .setStyle(ButtonStyle.Link)
+        .setURL(url.replace(/\.(webp|gif)(\?|$)/, ".png$2")),
+    );
+    if (!isPng) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setLabel(`⬇️ ${label} GIF`)
+          .setStyle(ButtonStyle.Link)
+          .setURL(url),
+      );
+    }
+    row.addComponents(
+      new ButtonBuilder()
+        .setLabel(`⬇️ ${label} WEBP`)
+        .setStyle(ButtonStyle.Link)
+        .setURL(url.replace(/\.(png|gif)(\?|$)/, ".webp$2")),
+    );
+    return row;
+  };
+
+  const avatarEmbed = new EmbedBuilder()
+    .setColor(member?.displayColor || COLOR_PRIMARY)
+    .setTitle(
+      hasServerAvatar
+        ? `🖼️ Avatar serveur — ${fetchedUser.tag}`
+        : `🖼️ Avatar — ${fetchedUser.tag}`,
+    )
+    .setImage(hasServerAvatar ? serverAvatarUrl : globalAvatarUrl);
+
+  const components = [makeButtons(hasServerAvatar ? serverAvatarUrl : globalAvatarUrl, "Avatar")];
+
+  const embeds = [avatarEmbed];
+
+  if (hasServerAvatar) {
+    embeds.push(
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🌐 Avatar global")
+        .setImage(globalAvatarUrl),
+    );
+    components.push(makeButtons(globalAvatarUrl, "Avatar global"));
+  }
+
+  if (bannerUrl) {
+    embeds.push(
+      new EmbedBuilder()
+        .setColor(bannerColor ?? COLOR_PRIMARY)
+        .setTitle("🎨 Bannière")
+        .setImage(bannerUrl),
+    );
+    components.push(makeButtons(bannerUrl, "Bannière"));
+  } else if (bannerColor) {
+    avatarEmbed.addFields({
+      name: "🎨 Couleur de bannière",
+      value: `#${bannerColor.toString(16).padStart(6, "0").toUpperCase()}`,
+      inline: true,
+    });
+  }
+
+  await interaction.editReply({ embeds, components });
+}
+
+async function handleServerInfo(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  await interaction.deferReply();
+  const guild = interaction.guild!;
+
+  const owner = await guild.fetchOwner().catch(() => null);
+  const channels = guild.channels.cache;
+  const textCount = channels.filter(
+    (c) => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement,
+  ).size;
+  const voiceChannels = channels.filter(
+    (c) => c.type === ChannelType.GuildVoice || c.type === ChannelType.GuildStageVoice,
+  );
+  const categoryCount = channels.filter((c) => c.type === ChannelType.GuildCategory).size;
+
+  const membersInVoice = voiceChannels.reduce(
+    (acc, ch) =>
+      "members" in ch ? acc + ch.members.filter((m) => !m.user.bot).size : acc,
+    0,
+  );
+
+  const boostTierLabel = ["Aucun", "Niveau 1", "Niveau 2", "Niveau 3"];
+  const totalMembers = guild.memberCount;
+  const cachedMembers = guild.members.cache;
+  const botCount = cachedMembers.filter((m) => m.user.bot).size;
+  const humanCount = totalMembers - botCount;
+
+  const roleCount = guild.roles.cache.size - 1;
+  const emojiCount = guild.emojis.cache.size;
+  const stickerCount = guild.stickers.cache.size;
+
+  const verif: Record<number, string> = {
+    0: "Aucune",
+    1: "Faible",
+    2: "Moyenne",
+    3: "Haute",
+    4: "Très haute",
+  };
+
+  const embed = new EmbedBuilder()
+    .setColor(COLOR_PRIMARY)
+    .setAuthor({ name: guild.name, iconURL: guild.iconURL() ?? undefined })
+    .setThumbnail(guild.iconURL({ size: 512 }) ?? null)
+    .setTitle("📊 Informations du serveur")
+    .addFields(
+      { name: "👑 Propriétaire", value: owner ? `<@${owner.id}>` : "Inconnu", inline: true },
+      { name: "🆔 ID", value: `\`${guild.id}\``, inline: true },
+      { name: "📅 Créé", value: ts(guild.createdAt), inline: false },
+      { name: "👥 Membres", value: `**${totalMembers}** (${humanCount} humains, ${botCount} bots)`, inline: true },
+      { name: "🎭 Rôles", value: `**${roleCount}**`, inline: true },
+      { name: "📝 Salons texte", value: `**${textCount}**`, inline: true },
+      { name: "🔊 Salons vocaux", value: `**${voiceChannels.size}** (${membersInVoice} connecté${membersInVoice > 1 ? "s" : ""})`, inline: true },
+      { name: "📁 Catégories", value: `**${categoryCount}**`, inline: true },
+      { name: "😀 Emojis", value: `**${emojiCount}**${stickerCount ? ` · ${stickerCount} stickers` : ""}`, inline: true },
+      {
+        name: "💎 Boosts",
+        value: `**${guild.premiumSubscriptionCount ?? 0}** boost${(guild.premiumSubscriptionCount ?? 0) > 1 ? "s" : ""} · ${boostTierLabel[guild.premiumTier] ?? "Inconnu"}`,
+        inline: true,
+      },
+      { name: "🔒 Vérification", value: verif[guild.verificationLevel] ?? "?", inline: true },
+    )
+    .setFooter({ text: `Serveur créé le ${guild.createdAt.toLocaleDateString("fr-FR")}` });
+
+  if (guild.bannerURL()) {
+    embed.setImage(guild.bannerURL({ size: 1024 }) ?? null);
+  }
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleUserInfo(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  await interaction.deferReply();
+  const guild = interaction.guild!;
+  const targetUser = interaction.options.getUser("user") ?? interaction.user;
+  const member = await guild.members.fetch(targetUser.id).catch(() => null);
+  const fetchedUser = await interaction.client.users
+    .fetch(targetUser.id, { force: true })
+    .catch(() => targetUser);
+
+  const flags = fetchedUser.flags?.toArray() ?? [];
+  const badges = flags
+    .map((f) => BADGE_MAP[String(f)])
+    .filter(Boolean)
+    .join("\n") || "Aucun";
+
+  const presence = member?.presence;
+  const statusLabel = STATUS_LABEL[presence?.status ?? "offline"] ?? "⚫ Hors ligne";
+
+  const activities = presence?.activities ?? [];
+  const activityLines = activities
+    .filter((a) => a.type !== ActivityType.Custom)
+    .map((a) => {
+      const emoji = ACTIVITY_EMOJI[a.type] ?? "▶️";
+      return `${emoji} **${a.name}**${a.details ? `\n└ ${a.details}` : ""}`;
+    });
+  const customStatus = activities.find((a) => a.type === ActivityType.Custom);
+  if (customStatus?.state) activityLines.unshift(`✨ *${customStatus.state}*`);
+
+  const roles = member?.roles.cache
+    .filter((r) => r.id !== guild.id)
+    .sort((a, b) => b.position - a.position)
+    ?? null;
+  const roleList = roles && roles.size > 0
+    ? [...roles.values()]
+        .slice(0, 25)
+        .map((r) => `<@&${r.id}>`)
+        .join(" ")
+        + (roles.size > 25 ? ` +${roles.size - 25}` : "")
+    : "Aucun";
+
+  const perms = member
+    ? KEY_PERMS.filter(([flag]) => member.permissions.has(flag)).map(([, label]) => label)
+    : [];
+
+  const isBot = fetchedUser.bot;
+  const accentColor = fetchedUser.accentColor;
+  const avatarUrl = member
+    ? member.displayAvatarURL({ size: 256 })
+    : fetchedUser.displayAvatarURL({ size: 256 });
+
+  const embed = new EmbedBuilder()
+    .setColor(member?.displayColor || accentColor || COLOR_PRIMARY)
+    .setAuthor({ name: fetchedUser.tag, iconURL: avatarUrl })
+    .setThumbnail(avatarUrl)
+    .addFields(
+      { name: "🆔 ID", value: `\`${fetchedUser.id}\``, inline: true },
+      { name: "🤖 Bot", value: isBot ? "Oui" : "Non", inline: true },
+      { name: "📅 Compte créé", value: ts(fetchedUser.createdAt), inline: false },
+    );
+
+  if (member) {
+    embed.addFields(
+      {
+        name: "📥 A rejoint le serveur",
+        value: member.joinedAt ? ts(member.joinedAt) : "Inconnu",
+        inline: false,
+      },
+      {
+        name: `🔔 Statut`,
+        value: statusLabel,
+        inline: true,
+      },
+    );
+
+    if (activityLines.length > 0) {
+      embed.addFields({
+        name: "🎯 Activité",
+        value: activityLines.join("\n").slice(0, 1024),
+        inline: false,
+      });
+    }
+
+    embed.addFields(
+      { name: `🎭 Rôles (${roles?.size ?? 0})`, value: roleList.slice(0, 1024), inline: false },
+    );
+
+    if (perms.length > 0) {
+      embed.addFields({
+        name: "🔑 Permissions clés",
+        value: perms.join(" · ") || "Aucune",
+        inline: false,
+      });
+    }
+
+    if (member.isCommunicationDisabled()) {
+      embed.addFields({
+        name: "🔇 Timeout jusqu'au",
+        value: `<t:${Math.floor(member.communicationDisabledUntilTimestamp! / 1000)}:R>`,
+        inline: true,
+      });
+    }
+
+    if (member.premiumSince) {
+      embed.addFields({
+        name: "💎 Booste depuis",
+        value: ts(member.premiumSince),
+        inline: true,
+      });
+    }
+  }
+
+  embed.addFields({ name: "🏅 Badges", value: badges, inline: false });
+
+  if (member?.nickname) {
+    embed.setDescription(`Pseudo : **${member.nickname}**`);
+  }
+
+  await interaction.editReply({ embeds: [embed] });
 }
 
 async function handlePing(
@@ -2687,6 +3059,9 @@ async function handleHelp(
       {
         name: "🔍 Utilitaires",
         value:
+          "`/avatar [@user]` → Avatar HD + bannière + boutons téléchargement\n" +
+          "`/serverinfo` → Carte détaillée du serveur\n" +
+          "`/userinfo [@user]` → Profil détaillé (badges, rôles, activités, perms)\n" +
           "`/snipe` → Voir le dernier message supprimé\n" +
           "`/userstats` → Stats anti-spam d'un membre\n" +
           "`/channelstats` → Top salons les plus actifs\n" +
