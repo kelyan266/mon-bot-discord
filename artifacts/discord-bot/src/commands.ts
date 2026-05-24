@@ -552,6 +552,27 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "resetroles",
+      description:
+        "Strip all roles from a member, keeping only those configured via the bot",
+      default_member_permissions: PermissionFlagsBits.ManageRoles.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "user",
+          description: "Member to reset",
+          required: true,
+        },
+        {
+          type: ApplicationCommandOptionType.Boolean,
+          name: "confirm",
+          description: "Confirm you want to strip all non-bot roles",
+          required: true,
+        },
+      ],
+    },
+    {
       name: "botrole",
       description: "Configure which role is required to use bot commands",
       default_member_permissions:
@@ -950,6 +971,8 @@ export async function handleInteraction(
       return handleLevelsToggle(interaction);
     case "setavatar":
       return handleSetAvatar(interaction);
+    case "resetroles":
+      return handleResetRoles(interaction);
     case "botrole":
       return handleBotRole(interaction);
     case "ticket":
@@ -1865,6 +1888,120 @@ async function handleTicket(
   }
 }
 
+async function handleResetRoles(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const confirm = interaction.options.getBoolean("confirm", true);
+
+  if (!confirm) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_WARN)
+        .setTitle("⚠️ Action annulée")
+        .setDescription(
+          "Tu dois mettre `confirm: True` pour exécuter cette commande.",
+        ),
+      true,
+    );
+    return;
+  }
+
+  const target = interaction.options.getMember("user") as GuildMember | null;
+  if (!target) {
+    await reply(
+      interaction,
+      new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Membre introuvable."),
+      true,
+    );
+    return;
+  }
+
+  if (target.id === guild.ownerId) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription("❌ Impossible de modifier les rôles du propriétaire."),
+      true,
+    );
+    return;
+  }
+
+  const botMember = guild.members.me!;
+  const botHighestPos = botMember.roles.highest.position;
+
+  const [autoRoleId, botRoleId, levelRoles] = await Promise.all([
+    getAutoRole(guild.id),
+    getBotRole(guild.id),
+    listLevelRoles(guild.id),
+  ]);
+
+  const keptIds = new Set<string>(
+    [
+      autoRoleId,
+      botRoleId,
+      ...levelRoles.map((lr) => lr.roleId),
+    ].filter(Boolean) as string[],
+  );
+
+  const toRemove = target.roles.cache.filter(
+    (role) =>
+      role.id !== guild.id &&
+      !keptIds.has(role.id) &&
+      role.position < botHighestPos &&
+      !role.managed,
+  );
+
+  if (toRemove.size === 0) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_WARN)
+        .setTitle("ℹ️ Aucun rôle à retirer")
+        .setDescription(
+          `<@${target.id}> n'a que des rôles gérés par le bot ou au-dessus du bot.`,
+        ),
+      true,
+    );
+    return;
+  }
+
+  await target.roles.remove(
+    [...toRemove.keys()],
+    `Réinitialisation par ${interaction.user.tag}`,
+  );
+
+  const keptMention = [...keptIds]
+    .filter((id) => target.roles.cache.has(id))
+    .map((id) => `<@&${id}>`)
+    .join(", ") || "Aucun";
+
+  const removedList = toRemove
+    .map((r) => `<@&${r.id}>`)
+    .join(", ");
+
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(COLOR_SUCCESS)
+      .setTitle("✅ Rôles réinitialisés")
+      .setDescription(`Rôles de <@${target.id}> mis à jour.`)
+      .addFields(
+        {
+          name: `🗑️ Retirés (${toRemove.size})`,
+          value: removedList.length > 1000 ? removedList.slice(0, 997) + "…" : removedList,
+        },
+        {
+          name: "✅ Conservés (bot)",
+          value: keptMention,
+        },
+      ),
+    true,
+  );
+}
+
 async function handleBotRole(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -2462,6 +2599,7 @@ async function handleHelp(
       {
         name: "⚙️ Configuration",
         value:
+          "`/resetroles @user confirm:True` → Retirer tous les rôles sauf ceux du bot\n" +
           "`/ticket setup|panel|close|add|remove|config` → Système de tickets\n" +
           "`/botrole set|clear|show` → Rôle requis pour utiliser le bot\n" +
           "`/setavatar` → Changer la photo de profil du bot\n" +
