@@ -17,7 +17,7 @@ import { saveSnipe } from "./snipes.js";
 import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
 import { getRolesUpToLevel } from "./levelRoles.js";
-import { isAutomodEnabled } from "./settings.js";
+import { isAutomodEnabled, isXpEnabled } from "./settings.js";
 import type { GuildMember } from "discord.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
@@ -102,11 +102,15 @@ client.on(Events.MessageCreate, async (message) => {
 
   recordChannelMessage(message.guild.id, message.channelId);
 
-  void addMessageXp(message.guild.id, message.author.id)
-    .then((result) => {
-      if (result?.leveledUp) announceLevelUp(message, result.level);
-    })
-    .catch((err) => console.error("Message XP failed:", err));
+  const guildId = message.guild.id;
+  void isXpEnabled(guildId).then((on) => {
+    if (!on) return;
+    addMessageXp(guildId, message.author.id)
+      .then((result) => {
+        if (result?.leveledUp) announceLevelUp(message, result.level);
+      })
+      .catch((err) => console.error("Message XP failed:", err));
+  });
 
   const me = message.guild.members.me;
   if (!me) return;
@@ -364,18 +368,21 @@ setInterval(() => {
       voiceSessions.delete(userId);
       continue;
     }
-    addVoiceXp(session.guildId, userId)
-      .then(async (result) => {
-        if (!result.leveledUp) return;
-        const channel = guild.channels.cache.get(session.channelId);
-        if (channel?.isTextBased() && "send" in channel) {
-          await channel
-            .send(`🎉 <@${userId}> est passé au **niveau ${result.level}** !`)
-            .catch(() => undefined);
-        }
-        await grantLevelRoles(member, result.level);
-      })
-      .catch((err) => console.error("Voice XP failed:", err));
+    void isXpEnabled(session.guildId).then((on) => {
+      if (!on) return;
+      addVoiceXp(session.guildId, userId)
+        .then(async (result) => {
+          if (!result.leveledUp) return;
+          const channel = guild.channels.cache.get(session.channelId);
+          if (channel?.isTextBased() && "send" in channel) {
+            await channel
+              .send(`🎉 <@${userId}> est passé au **niveau ${result.level}** !`)
+              .catch(() => undefined);
+          }
+          await grantLevelRoles(member, result.level);
+        })
+        .catch((err) => console.error("Voice XP failed:", err));
+    });
   }
 }, 60_000).unref();
 

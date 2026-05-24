@@ -36,7 +36,11 @@ import {
   removeLevelRole,
   setLevelRole,
 } from "./levelRoles.js";
-import { getGuildSettings, setAutomodEnabled } from "./settings.js";
+import {
+  getGuildSettings,
+  setAutomodEnabled,
+  setXpEnabled,
+} from "./settings.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -367,6 +371,30 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "levels",
+      description: "Enable or disable the XP/levels system on this server",
+      default_member_permissions:
+        PermissionFlagsBits.ManageGuild.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "enable",
+          description: "Turn on XP gain for messages and voice",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "disable",
+          description: "Turn off XP gain (existing XP is kept)",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "status",
+          description: "Show whether the XP system is active",
+        },
+      ],
+    },
+    {
       name: "automod",
       description: "Enable or disable automatic moderation on this server",
       default_member_permissions:
@@ -688,6 +716,8 @@ export async function handleInteraction(
       return handleXp(interaction);
     case "automod":
       return handleAutomod(interaction);
+    case "levels":
+      return handleLevelsToggle(interaction);
     default:
       await reply(
         interaction,
@@ -1153,6 +1183,61 @@ async function handleUserStats(
       }),
     true,
   );
+}
+
+async function handleLevelsToggle(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "enable" || sub === "disable") {
+    const enabling = sub === "enable";
+    await setXpEnabled(guild.id, enabling);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(enabling ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(enabling ? "✅ Système d'XP activé" : "⚠️ Système d'XP désactivé")
+        .setDescription(
+          enabling
+            ? "Les membres gagnent à nouveau de l'XP par messages et en vocal."
+            : "Les membres ne gagnent plus d'XP. Les données existantes sont conservées.",
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "status") {
+    const settings = await getGuildSettings(guild.id);
+    const on = settings.xpEnabled;
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(on ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle("📈 Statut du système d'XP")
+        .addFields(
+          {
+            name: "XP par message",
+            value: on ? "✅ Actif" : "❌ Désactivé",
+            inline: true,
+          },
+          {
+            name: "XP en vocal",
+            value: on ? "✅ Actif" : "❌ Désactivé",
+            inline: true,
+          },
+        )
+        .setFooter({
+          text: on
+            ? 'Utilise "/levels disable" pour désactiver.'
+            : 'Utilise "/levels enable" pour réactiver.',
+        }),
+      true,
+    );
+    return;
+  }
 }
 
 async function handleAutomod(
@@ -1681,6 +1766,7 @@ async function handleHelp(
       {
         name: "⚙️ Configuration",
         value:
+          "`/levels enable|disable|status` → Activer/désactiver le système d'XP\n" +
           "`/automod enable|disable|status` → Activer/désactiver l'automod\n" +
           "`/autorole set` → Rôle auto à l'arrivée\n" +
           "`/autorole show` → Voir le rôle auto\n" +

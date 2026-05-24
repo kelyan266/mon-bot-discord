@@ -8,13 +8,17 @@ const FILE = path.join(DATA_DIR, "settings.json");
 
 interface GuildSettings {
   automodEnabled: boolean;
+  xpEnabled: boolean;
 }
 
 interface SettingsDb {
   guilds: Record<string, GuildSettings>;
 }
 
-const DEFAULT_SETTINGS: GuildSettings = { automodEnabled: true };
+const DEFAULT_SETTINGS: GuildSettings = {
+  automodEnabled: true,
+  xpEnabled: true,
+};
 
 let cache: SettingsDb | null = null;
 let writeLock: Promise<void> = Promise.resolve();
@@ -60,6 +64,20 @@ export async function setAutomodEnabled(
 ): Promise<void> {
   const db = await ensureLoaded();
   getGuild(db, guildId).automodEnabled = enabled;
+  await persist();
+}
+
+export async function isXpEnabled(guildId: string): Promise<boolean> {
+  const db = await ensureLoaded();
+  return getGuild(db, guildId).xpEnabled;
+}
+
+export async function setXpEnabled(
+  guildId: string,
+  enabled: boolean,
+): Promise<void> {
+  const db = await ensureLoaded();
+  getGuild(db, guildId).xpEnabled = enabled;
   await persist();
 }
 
