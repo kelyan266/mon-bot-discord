@@ -372,7 +372,7 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
     },
     {
       name: "setavatar",
-      description: "Change the bot's profile picture (global — 2 changes/hour max)",
+      description: "Change the bot's profile picture on this server only",
       default_member_permissions:
         PermissionFlagsBits.Administrator.toString(),
       dm_permission: false,
@@ -1255,17 +1255,24 @@ async function handleSetAvatar(
     const mime = contentType.split(";")[0]!.trim();
     const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
 
-    await interaction.client.user.setAvatar(dataUrl);
+    const guild = interaction.guild!;
+    await interaction.client.rest.patch(`/guilds/${guild.id}/members/@me`, {
+      body: { avatar: dataUrl },
+    });
 
+    const me = guild.members.me;
     await interaction.editReply({
       embeds: [
         new EmbedBuilder()
           .setColor(COLOR_SUCCESS)
           .setTitle("✅ Photo de profil mise à jour")
           .setDescription(
-            "La nouvelle photo de profil du bot est active.\n⚠️ Discord limite les changements à **2 par heure**.",
+            `La photo de profil du bot a été changée **sur ce serveur uniquement**.\nElle reste inchangée sur les autres serveurs.\n⚠️ Discord peut limiter la fréquence des changements.`,
           )
-          .setThumbnail(interaction.client.user.displayAvatarURL()),
+          .setThumbnail(
+            me?.displayAvatarURL() ??
+              interaction.client.user.displayAvatarURL(),
+          ),
       ],
     });
   } catch (err) {
