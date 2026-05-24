@@ -1,10 +1,13 @@
 import {
   ApplicationCommandOptionType,
+  ChannelType,
   ChatInputCommandInteraction,
   EmbedBuilder,
   GuildMember,
   PermissionFlagsBits,
+  PermissionsBitField,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
+  type TextChannel,
 } from "discord.js";
 import {
   addWarning,
@@ -36,6 +39,13 @@ import {
   removeLevelRole,
   setLevelRole,
 } from "./levelRoles.js";
+import {
+  buildPanel,
+  getTicketConfig,
+  handleTicketClose,
+  removeTicket,
+  saveTicketConfig,
+} from "./tickets.js";
 import {
   clearBotRole,
   getBotRole,
@@ -415,6 +425,99 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
           type: ApplicationCommandOptionType.Subcommand,
           name: "status",
           description: "Show whether the XP system is active",
+        },
+      ],
+    },
+    {
+      name: "ticket",
+      description: "Manage the ticket system",
+      default_member_permissions:
+        PermissionFlagsBits.ManageChannels.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "setup",
+          description: "Configure the ticket system (support role, category, log channel)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Support role that can see all tickets",
+              required: false,
+            },
+            {
+              type: ApplicationCommandOptionType.Channel,
+              name: "category",
+              description: "Category where ticket channels are created",
+              required: false,
+              channel_types: [ChannelType.GuildCategory],
+            },
+            {
+              type: ApplicationCommandOptionType.Channel,
+              name: "log",
+              description: "Channel where closed ticket transcripts are sent",
+              required: false,
+              channel_types: [ChannelType.GuildText],
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "panel",
+          description: "Post the ticket panel (open button) in this channel",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "description",
+              description: "Custom text shown in the panel embed",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "close",
+          description: "Close and delete the current ticket channel",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "reason",
+              description: "Reason for closing",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "add",
+          description: "Add a member to this ticket",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "user",
+              description: "Member to add",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "remove",
+          description: "Remove a member from this ticket",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "user",
+              description: "Member to remove",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "config",
+          description: "Show the current ticket system configuration",
         },
       ],
     },
@@ -819,6 +922,8 @@ export async function handleInteraction(
       return handleSetAvatar(interaction);
     case "botrole":
       return handleBotRole(interaction);
+    case "ticket":
+      return handleTicket(interaction);
     default:
       await reply(
         interaction,
@@ -1424,6 +1529,208 @@ async function handleLevelsToggle(
   }
 }
 
+async function handleTicket(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "setup") {
+    const role = interaction.options.getRole("role");
+    const category = interaction.options.getChannel("category");
+    const log = interaction.options.getChannel("log");
+
+    await saveTicketConfig(guild.id, {
+      supportRoleId: role?.id ?? undefined,
+      categoryId: category?.id ?? undefined,
+      logChannelId: log?.id ?? undefined,
+    });
+
+    const config = await getTicketConfig(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Tickets configurés")
+        .addFields(
+          {
+            name: "Rôle support",
+            value: config.supportRoleId
+              ? `<@&${config.supportRoleId}>`
+              : "Aucun",
+            inline: true,
+          },
+          {
+            name: "Catégorie",
+            value: config.categoryId ? `<#${config.categoryId}>` : "Aucune",
+            inline: true,
+          },
+          {
+            name: "Salon de log",
+            value: config.logChannelId
+              ? `<#${config.logChannelId}>`
+              : "Aucun",
+            inline: true,
+          },
+        )
+        .setFooter({
+          text: 'Utilise "/ticket panel" pour poster le bouton d\'ouverture.',
+        }),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "panel") {
+    const description =
+      interaction.options.getString("description") ?? undefined;
+    const channel = interaction.channel as TextChannel;
+    await channel.send(buildPanel(description));
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Panel posté")
+        .setDescription("Le bouton d'ouverture de ticket a été publié."),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "close") {
+    const reason = interaction.options.getString("reason") ?? undefined;
+    const channel = interaction.channel as TextChannel;
+    const member = interaction.member as GuildMember;
+
+    const config = await getTicketConfig(guild.id);
+    const isTicket = Object.values(config.openTickets).includes(channel.id);
+    if (!isTicket) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("❌ Pas un ticket")
+          .setDescription("Ce salon n'est pas un ticket ouvert."),
+        true,
+      );
+      return;
+    }
+
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("🔒 Fermeture en cours…")
+        .setDescription("Le ticket va être fermé et ce canal supprimé."),
+      true,
+    );
+    await handleTicketClose(null, channel, member, reason);
+    return;
+  }
+
+  if (sub === "add" || sub === "remove") {
+    const target = interaction.options.getMember("user") as GuildMember | null;
+    if (!target) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription("Membre introuvable sur ce serveur."),
+        true,
+      );
+      return;
+    }
+
+    const channel = interaction.channel as TextChannel;
+    const config = await getTicketConfig(guild.id);
+    if (!Object.values(config.openTickets).includes(channel.id)) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("❌ Pas un ticket")
+          .setDescription("Ce salon n'est pas un ticket ouvert."),
+        true,
+      );
+      return;
+    }
+
+    if (sub === "add") {
+      await channel.permissionOverwrites.edit(target.id, {
+        ViewChannel: true,
+        SendMessages: true,
+        ReadMessageHistory: true,
+        AttachFiles: true,
+      });
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Membre ajouté")
+          .setDescription(`<@${target.id}> peut maintenant voir ce ticket.`),
+        true,
+      );
+    } else {
+      await channel.permissionOverwrites.delete(target.id);
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Membre retiré")
+          .setDescription(`<@${target.id}> ne peut plus voir ce ticket.`),
+        true,
+      );
+    }
+    return;
+  }
+
+  if (sub === "config") {
+    const config = await getTicketConfig(guild.id);
+    const open = Object.keys(config.openTickets).length;
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🎫 Configuration des tickets")
+        .addFields(
+          {
+            name: "Rôle support",
+            value: config.supportRoleId
+              ? `<@&${config.supportRoleId}>`
+              : "Non configuré",
+            inline: true,
+          },
+          {
+            name: "Catégorie",
+            value: config.categoryId
+              ? `<#${config.categoryId}>`
+              : "Non configurée",
+            inline: true,
+          },
+          {
+            name: "Salon de log",
+            value: config.logChannelId
+              ? `<#${config.logChannelId}>`
+              : "Non configuré",
+            inline: true,
+          },
+          {
+            name: "Tickets ouverts",
+            value: `**${open}**`,
+            inline: true,
+          },
+          {
+            name: "Total créés",
+            value: `**${config.ticketCount}**`,
+            inline: true,
+          },
+        ),
+      true,
+    );
+    return;
+  }
+}
+
 async function handleBotRole(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -2021,6 +2328,7 @@ async function handleHelp(
       {
         name: "⚙️ Configuration",
         value:
+          "`/ticket setup|panel|close|add|remove|config` → Système de tickets\n" +
           "`/botrole set|clear|show` → Rôle requis pour utiliser le bot\n" +
           "`/setavatar` → Changer la photo de profil du bot\n" +
           "`/levels enable|disable|status` → Activer/désactiver le système d'XP\n" +

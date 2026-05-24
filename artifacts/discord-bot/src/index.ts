@@ -19,6 +19,12 @@ import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
 import { getRolesUpToLevel } from "./levelRoles.js";
 import { isAutomodEnabled, isXpEnabled } from "./settings.js";
+import {
+  CLOSE_BUTTON_ID,
+  PANEL_BUTTON_ID,
+  handleTicketClose,
+  handleTicketOpen,
+} from "./tickets.js";
 import type { GuildMember } from "discord.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
@@ -99,6 +105,29 @@ client.on(Events.GuildCreate, () => updatePresence());
 client.on(Events.GuildDelete, () => updatePresence());
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isButton()) {
+    try {
+      if (interaction.customId === PANEL_BUTTON_ID) {
+        await handleTicketOpen(interaction);
+        return;
+      }
+      if (interaction.customId === CLOSE_BUTTON_ID) {
+        const channel = interaction.channel;
+        const member = interaction.member as import("discord.js").GuildMember;
+        if (!channel || !channel.isTextBased() || !("guild" in channel)) return;
+        await handleTicketClose(
+          interaction,
+          channel as import("discord.js").TextChannel,
+          member,
+        );
+        return;
+      }
+    } catch (err) {
+      console.error("Button interaction error:", err);
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
   try {
     await handleInteraction(interaction);
