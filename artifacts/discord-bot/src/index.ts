@@ -1,4 +1,5 @@
 import {
+  ActivityType,
   ChannelType,
   Client,
   EmbedBuilder,
@@ -69,6 +70,21 @@ async function syncCommands(applicationId: string): Promise<void> {
   }
 }
 
+function updatePresence(): void {
+  if (!client.user) return;
+  const count = client.guilds.cache.size;
+  client.user.setPresence({
+    status: "online",
+    activities: [
+      {
+        name: "Louboutin on top",
+        state: `Modère ${count} serveur${count !== 1 ? "s" : ""}`,
+        type: ActivityType.Custom,
+      },
+    ],
+  });
+}
+
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag} (id: ${c.user.id})`);
   console.log(`Serving ${c.guilds.cache.size} guild(s).`);
@@ -76,7 +92,11 @@ client.once(Events.ClientReady, async (c) => {
     `Toxicity detection: ${toxicityEnabled ? "enabled (gpt-5-nano)" : "disabled"}`,
   );
   await syncCommands(c.user.id);
+  updatePresence();
 });
+
+client.on(Events.GuildCreate, () => updatePresence());
+client.on(Events.GuildDelete, () => updatePresence());
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
