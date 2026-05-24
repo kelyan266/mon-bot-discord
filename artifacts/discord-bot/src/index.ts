@@ -17,6 +17,7 @@ import { saveSnipe } from "./snipes.js";
 import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
 import { getRolesUpToLevel } from "./levelRoles.js";
+import { isAutomodEnabled } from "./settings.js";
 import type { GuildMember } from "discord.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
@@ -119,6 +120,9 @@ client.on(Events.MessageCreate, async (message) => {
     console.log("Booster détecté :", message.author.tag);
     return;
   }
+
+  const automodOn = await isAutomodEnabled(message.guild.id);
+  if (!automodOn) return;
 
   const result = checkSpam(message);
 

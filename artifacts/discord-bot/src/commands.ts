@@ -36,6 +36,7 @@ import {
   removeLevelRole,
   setLevelRole,
 } from "./levelRoles.js";
+import { getGuildSettings, setAutomodEnabled } from "./settings.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -366,6 +367,30 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "automod",
+      description: "Enable or disable automatic moderation on this server",
+      default_member_permissions:
+        PermissionFlagsBits.ManageGuild.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "enable",
+          description: "Turn on anti-spam and toxicity detection",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "disable",
+          description: "Turn off anti-spam and toxicity detection",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "status",
+          description: "Show the current automod status",
+        },
+      ],
+    },
+    {
       name: "xp",
       description: "Admin: manually adjust a member's XP",
       default_member_permissions:
@@ -661,6 +686,8 @@ export async function handleInteraction(
       return handleLevelRole(interaction);
     case "xp":
       return handleXp(interaction);
+    case "automod":
+      return handleAutomod(interaction);
     default:
       await reply(
         interaction,
@@ -1126,6 +1153,61 @@ async function handleUserStats(
       }),
     true,
   );
+}
+
+async function handleAutomod(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "enable" || sub === "disable") {
+    const enabling = sub === "enable";
+    await setAutomodEnabled(guild.id, enabling);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(enabling ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(enabling ? "✅ Automod activé" : "⚠️ Automod désactivé")
+        .setDescription(
+          enabling
+            ? "L'anti-spam et la détection de toxicité sont maintenant **actifs** sur ce serveur."
+            : "L'anti-spam et la détection de toxicité sont maintenant **désactivés**. Les messages ne seront plus filtrés automatiquement.",
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "status") {
+    const settings = await getGuildSettings(guild.id);
+    const on = settings.automodEnabled;
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(on ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle("🛡️ Statut de l'Automod")
+        .addFields(
+          {
+            name: "Anti-spam",
+            value: on ? "✅ Actif" : "❌ Désactivé",
+            inline: true,
+          },
+          {
+            name: "Détection de toxicité",
+            value: on ? "✅ Actif" : "❌ Désactivé",
+            inline: true,
+          },
+        )
+        .setFooter({
+          text: on
+            ? 'Utilise "/automod disable" pour désactiver.'
+            : 'Utilise "/automod enable" pour réactiver.',
+        }),
+      true,
+    );
+    return;
+  }
 }
 
 async function handleXp(
@@ -1599,6 +1681,7 @@ async function handleHelp(
       {
         name: "⚙️ Configuration",
         value:
+          "`/automod enable|disable|status` → Activer/désactiver l'automod\n" +
           "`/autorole set` → Rôle auto à l'arrivée\n" +
           "`/autorole show` → Voir le rôle auto\n" +
           "`/autorole clear` → Désactiver le rôle auto",
