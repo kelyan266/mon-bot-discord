@@ -23,6 +23,7 @@ export interface TicketGuildConfig {
   supportRoleId?: string;
   categoryId?: string;
   logChannelId?: string;
+  welcomeMessage?: string;
   ticketCount: number;
   openTickets: Record<string, string>;
 }
@@ -82,6 +83,8 @@ export async function saveTicketConfig(
   if (patch.categoryId !== undefined) guild.categoryId = patch.categoryId;
   if (patch.logChannelId !== undefined)
     guild.logChannelId = patch.logChannelId;
+  if (patch.welcomeMessage !== undefined)
+    guild.welcomeMessage = patch.welcomeMessage;
   await persist();
 }
 
@@ -240,12 +243,19 @@ export async function handleTicketOpen(
 
   await registerTicket(guild.id, member.id, channel.id);
 
+  const defaultWelcome = `Bonjour <@${member.id}> ! Décris ton problème et l'équipe support te répondra dès que possible.`;
+  const welcomeText = config.welcomeMessage
+    ? config.welcomeMessage
+        .replace(/\{user\}/g, `<@${member.id}>`)
+        .replace(/\{username\}/g, member.user.username)
+        .replace(/\{ticket_count\}/g, String(ticketNum))
+        .replace(/\{server\}/g, guild.name)
+    : defaultWelcome;
+
   const welcomeEmbed = new EmbedBuilder()
     .setColor(0x57f287)
     .setTitle(`🎫 Ticket #${ticketNum}`)
-    .setDescription(
-      `Bonjour <@${member.id}> ! Décris ton problème et l'équipe support te répondra dès que possible.`,
-    )
+    .setDescription(welcomeText)
     .addFields({
       name: "Fermer",
       value: "Clique sur le bouton ci-dessous ou utilise `/ticket close`.",

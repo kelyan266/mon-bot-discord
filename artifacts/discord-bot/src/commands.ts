@@ -519,6 +519,36 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
           name: "config",
           description: "Show the current ticket system configuration",
         },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "setwelcome",
+          description:
+            "Set a custom welcome message for new tickets. Variables: {user} {username} {ticket_count} {server}",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "message",
+              description:
+                "Welcome message template (use {user}, {username}, {ticket_count}, {server}). Leave empty to reset.",
+              required: false,
+              max_length: 1000,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "rename",
+          description: "Rename the current ticket channel",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "name",
+              description: "New channel name (letters, numbers, hyphens only)",
+              required: true,
+              max_length: 80,
+            },
+          ],
+        },
       ],
     },
     {
@@ -1724,7 +1754,111 @@ async function handleTicket(
             value: `**${config.ticketCount}**`,
             inline: true,
           },
+          {
+            name: "Message de bienvenue",
+            value: config.welcomeMessage
+              ? `\`\`\`${config.welcomeMessage}\`\`\``
+              : "Par défaut",
+          },
         ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "setwelcome") {
+    const message = interaction.options.getString("message");
+
+    await saveTicketConfig(guild.id, {
+      welcomeMessage: message ?? undefined,
+    });
+
+    if (message) {
+      const preview = message
+        .replace(/\{user\}/g, `<@${interaction.user.id}>`)
+        .replace(/\{username\}/g, interaction.user.username)
+        .replace(/\{ticket_count\}/g, "42")
+        .replace(/\{server\}/g, guild.name);
+
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Message de bienvenue mis à jour")
+          .addFields(
+            {
+              name: "Template enregistré",
+              value: `\`\`\`${message}\`\`\``,
+            },
+            {
+              name: "Aperçu (ticket #42)",
+              value: preview,
+            },
+          )
+          .setFooter({
+            text: "Variables disponibles : {user} {username} {ticket_count} {server}",
+          }),
+        true,
+      );
+    } else {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Message de bienvenue réinitialisé")
+          .setDescription(
+            "Le message par défaut sera utilisé pour les prochains tickets.",
+          ),
+        true,
+      );
+    }
+    return;
+  }
+
+  if (sub === "rename") {
+    const rawName = interaction.options.getString("name", true);
+    const safeName = rawName
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 80);
+
+    if (!safeName) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription(
+            "❌ Nom invalide. Utilise uniquement des lettres, chiffres et tirets.",
+          ),
+        true,
+      );
+      return;
+    }
+
+    const channel = interaction.channel as TextChannel;
+    const config = await getTicketConfig(guild.id);
+    if (!Object.values(config.openTickets).includes(channel.id)) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("❌ Pas un ticket")
+          .setDescription("Ce salon n'est pas un ticket ouvert."),
+        true,
+      );
+      return;
+    }
+
+    const oldName = channel.name;
+    await channel.setName(safeName, `Renommé par ${interaction.user.tag}`);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Ticket renommé")
+        .setDescription(`\`${oldName}\` → \`${safeName}\``),
       true,
     );
     return;
