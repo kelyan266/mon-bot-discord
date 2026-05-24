@@ -47,9 +47,13 @@ import {
   saveTicketConfig,
 } from "./tickets.js";
 import {
+  addKeepRole,
   clearBotRole,
+  clearKeepRoles,
   getBotRole,
   getGuildSettings,
+  getKeepRoles,
+  removeKeepRole,
   setBotRole,
   setAutomodEnabled,
   setXpEnabled,
@@ -554,21 +558,64 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
     {
       name: "resetroles",
       description:
-        "Strip all roles from a member, keeping only those configured via the bot",
+        "Derank a member — strip all roles except those you configured to keep",
       default_member_permissions: PermissionFlagsBits.ManageRoles.toString(),
       dm_permission: false,
       options: [
         {
-          type: ApplicationCommandOptionType.User,
-          name: "user",
-          description: "Member to reset",
-          required: true,
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "run",
+          description: "Strip all roles from a member, keeping only configured roles",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "user",
+              description: "Member to derank",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.Boolean,
+              name: "confirm",
+              description: "Confirm the action",
+              required: true,
+            },
+          ],
         },
         {
-          type: ApplicationCommandOptionType.Boolean,
-          name: "confirm",
-          description: "Confirm you want to strip all non-bot roles",
-          required: true,
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "addrole",
+          description: "Add a role to the keep list (will not be removed on derank)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Role to keep on derank",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "removerole",
+          description: "Remove a role from the keep list",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Role to remove from keep list",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "listroles",
+          description: "Show all roles currently in the keep list",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "clearroles",
+          description: "Clear the entire keep list",
         },
       ],
     },
@@ -1892,114 +1939,171 @@ async function handleResetRoles(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   const guild = interaction.guild!;
-  const confirm = interaction.options.getBoolean("confirm", true);
+  const sub = interaction.options.getSubcommand();
 
-  if (!confirm) {
+  if (sub === "addrole") {
+    const role = interaction.options.getRole("role", true);
+    const added = await addKeepRole(guild.id, role.id);
     await reply(
       interaction,
       new EmbedBuilder()
-        .setColor(COLOR_WARN)
-        .setTitle("⚠️ Action annulée")
+        .setColor(added ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(added ? "✅ Rôle ajouté à la liste" : "⚠️ Déjà dans la liste")
         .setDescription(
-          "Tu dois mettre `confirm: True` pour exécuter cette commande.",
+          added
+            ? `<@&${role.id}> sera conservé lors des deranks.`
+            : `<@&${role.id}> est déjà dans la liste.`,
         ),
       true,
     );
     return;
   }
 
-  const target = interaction.options.getMember("user") as GuildMember | null;
-  if (!target) {
-    await reply(
-      interaction,
-      new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Membre introuvable."),
-      true,
-    );
-    return;
-  }
-
-  if (target.id === guild.ownerId) {
+  if (sub === "removerole") {
+    const role = interaction.options.getRole("role", true);
+    const removed = await removeKeepRole(guild.id, role.id);
     await reply(
       interaction,
       new EmbedBuilder()
-        .setColor(COLOR_DANGER)
-        .setDescription("❌ Impossible de modifier les rôles du propriétaire."),
-      true,
-    );
-    return;
-  }
-
-  const botMember = guild.members.me!;
-  const botHighestPos = botMember.roles.highest.position;
-
-  const [autoRoleId, botRoleId, levelRoles] = await Promise.all([
-    getAutoRole(guild.id),
-    getBotRole(guild.id),
-    listLevelRoles(guild.id),
-  ]);
-
-  const keptIds = new Set<string>(
-    [
-      autoRoleId,
-      botRoleId,
-      ...levelRoles.map((lr) => lr.roleId),
-    ].filter(Boolean) as string[],
-  );
-
-  const toRemove = target.roles.cache.filter(
-    (role) =>
-      role.id !== guild.id &&
-      !keptIds.has(role.id) &&
-      role.position < botHighestPos &&
-      !role.managed,
-  );
-
-  if (toRemove.size === 0) {
-    await reply(
-      interaction,
-      new EmbedBuilder()
-        .setColor(COLOR_WARN)
-        .setTitle("ℹ️ Aucun rôle à retirer")
+        .setColor(removed ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(removed ? "✅ Rôle retiré de la liste" : "⚠️ Rôle introuvable")
         .setDescription(
-          `<@${target.id}> n'a que des rôles gérés par le bot ou au-dessus du bot.`,
+          removed
+            ? `<@&${role.id}> ne sera plus conservé lors des deranks.`
+            : `<@&${role.id}> n'était pas dans la liste.`,
         ),
       true,
     );
     return;
   }
 
-  await target.roles.remove(
-    [...toRemove.keys()],
-    `Réinitialisation par ${interaction.user.tag}`,
-  );
+  if (sub === "listroles") {
+    const ids = await getKeepRoles(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🛡️ Rôles conservés lors du derank")
+        .setDescription(
+          ids.length > 0
+            ? ids.map((id) => `• <@&${id}>`).join("\n")
+            : "Aucun rôle configuré. Utilise `/resetroles addrole` pour en ajouter.",
+        )
+        .setFooter({ text: `${ids.length} rôle(s) configuré(s)` }),
+      true,
+    );
+    return;
+  }
 
-  const keptMention = [...keptIds]
-    .filter((id) => target.roles.cache.has(id))
-    .map((id) => `<@&${id}>`)
-    .join(", ") || "Aucun";
+  if (sub === "clearroles") {
+    await clearKeepRoles(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Liste vidée")
+        .setDescription(
+          "Plus aucun rôle dans la liste. Les prochains deranks retireront tous les rôles accessibles.",
+        ),
+      true,
+    );
+    return;
+  }
 
-  const removedList = toRemove
-    .map((r) => `<@&${r.id}>`)
-    .join(", ");
+  if (sub === "run") {
+    const confirm = interaction.options.getBoolean("confirm", true);
+    if (!confirm) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setTitle("⚠️ Action annulée")
+          .setDescription("Tu dois mettre `confirm: True` pour exécuter le derank."),
+        true,
+      );
+      return;
+    }
 
-  await reply(
-    interaction,
-    new EmbedBuilder()
-      .setColor(COLOR_SUCCESS)
-      .setTitle("✅ Rôles réinitialisés")
-      .setDescription(`Rôles de <@${target.id}> mis à jour.`)
-      .addFields(
-        {
-          name: `🗑️ Retirés (${toRemove.size})`,
-          value: removedList.length > 1000 ? removedList.slice(0, 997) + "…" : removedList,
-        },
-        {
-          name: "✅ Conservés (bot)",
-          value: keptMention,
-        },
-      ),
-    true,
-  );
+    const target = interaction.options.getMember("user") as GuildMember | null;
+    if (!target) {
+      await reply(
+        interaction,
+        new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Membre introuvable."),
+        true,
+      );
+      return;
+    }
+
+    if (target.id === guild.ownerId) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription("❌ Impossible de modifier les rôles du propriétaire."),
+        true,
+      );
+      return;
+    }
+
+    const botMember = guild.members.me!;
+    const botHighestPos = botMember.roles.highest.position;
+
+    const configuredKeepIds = await getKeepRoles(guild.id);
+    const keptIds = new Set<string>(configuredKeepIds);
+
+    const toRemove = target.roles.cache.filter(
+      (role) =>
+        role.id !== guild.id &&
+        !keptIds.has(role.id) &&
+        role.position < botHighestPos &&
+        !role.managed,
+    );
+
+    if (toRemove.size === 0) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setTitle("ℹ️ Aucun rôle à retirer")
+          .setDescription(
+            `<@${target.id}> n'a aucun rôle hors de la liste de conservation.`,
+          ),
+        true,
+      );
+      return;
+    }
+
+    await target.roles.remove(
+      [...toRemove.keys()],
+      `Derank par ${interaction.user.tag}`,
+    );
+
+    const keptNow = [...keptIds]
+      .filter((id) => target.roles.cache.has(id))
+      .map((id) => `<@&${id}>`)
+      .join(", ") || "Aucun";
+
+    const removedList = toRemove.map((r) => `<@&${r.id}>`).join(", ");
+
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Derank effectué")
+        .setDescription(`Rôles de <@${target.id}> réinitialisés.`)
+        .addFields(
+          {
+            name: `🗑️ Retirés (${toRemove.size})`,
+            value: removedList.length > 1000 ? removedList.slice(0, 997) + "…" : removedList,
+          },
+          {
+            name: "✅ Conservés",
+            value: keptNow,
+          },
+        ),
+      true,
+    );
+  }
 }
 
 async function handleBotRole(

@@ -10,6 +10,7 @@ interface GuildSettings {
   automodEnabled: boolean;
   xpEnabled: boolean;
   botRoleId?: string;
+  keepRoleIds?: string[];
 }
 
 interface SettingsDb {
@@ -110,4 +111,41 @@ export async function getGuildSettings(
 ): Promise<GuildSettings> {
   const db = await ensureLoaded();
   return { ...getGuild(db, guildId) };
+}
+
+export async function getKeepRoles(guildId: string): Promise<string[]> {
+  const db = await ensureLoaded();
+  return [...(getGuild(db, guildId).keepRoleIds ?? [])];
+}
+
+export async function addKeepRole(
+  guildId: string,
+  roleId: string,
+): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  guild.keepRoleIds ??= [];
+  if (guild.keepRoleIds.includes(roleId)) return false;
+  guild.keepRoleIds.push(roleId);
+  await persist();
+  return true;
+}
+
+export async function removeKeepRole(
+  guildId: string,
+  roleId: string,
+): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  const before = guild.keepRoleIds?.length ?? 0;
+  guild.keepRoleIds = (guild.keepRoleIds ?? []).filter((id) => id !== roleId);
+  if (guild.keepRoleIds.length === before) return false;
+  await persist();
+  return true;
+}
+
+export async function clearKeepRoles(guildId: string): Promise<void> {
+  const db = await ensureLoaded();
+  getGuild(db, guildId).keepRoleIds = [];
+  await persist();
 }
