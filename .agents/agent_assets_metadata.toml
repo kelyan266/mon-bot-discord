@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Js4EDcMaY756KqN57PXzs"
+uri = "file://discord-bot-export.tar.gz"
+type = "unspecified"
+title = "discord-bot-source.tar.gz"
