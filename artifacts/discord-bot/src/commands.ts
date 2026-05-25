@@ -5231,7 +5231,7 @@ function buildHelpEmbed(): EmbedBuilder {
       {
         name: "🔒 Salons",
         value:
-          "`/lock` · `/unlock` → Verrouiller / déverrouiller le salon\n" +
+          "`/lock` · `/unlock` → Verrouiller / déverrouiller un salon\n" +
           "`/slowmode <secondes>` → Définir le délai entre messages",
         inline: false,
       },
@@ -5264,7 +5264,7 @@ function buildHelpEmbed(): EmbedBuilder {
           "`/level [@user]` → Voir son niveau et sa progression\n" +
           "`/leaderboard` → Classement XP / Messages / Vocal avec pagination et menu\n" +
           "`/levelrole set <niveau> <rôle>` · `remove` · `list` → Récompenses de rôle\n" +
-          "`/xp give|take|set|reset <user>` *(admin)* → Ajuster l'XP\n" +
+          "`/xp give|take|set|reset <user>` *(admin)* → Ajuster l'XP manuellement\n" +
           "`/levels enable|disable|status` *(admin)* → Activer / désactiver le système",
         inline: false,
       },
@@ -5272,7 +5272,7 @@ function buildHelpEmbed(): EmbedBuilder {
         name: "🎰 Casino",
         value:
           "`/balance [@user]` → Voir son portefeuille\n" +
-          "`/daily` → Récompense quotidienne (+ bonus streak si activé)\n" +
+          "`/daily` → Récompense quotidienne (+ bonus streak)\n" +
           "`/slots <mise>` → Machine à sous\n" +
           "`/blackjack <mise>` → Blackjack interactif (tirer / rester / doubler)\n" +
           "`/roulette <mise> <choix>` → Roulette européenne\n" +
@@ -5290,33 +5290,64 @@ function buildHelpEmbed(): EmbedBuilder {
         inline: false,
       },
       {
+        name: "📅 Événements",
+        value:
+          "`/event create <titre> <description> <date> <heure>` → Créer un événement\n" +
+          "`/event join <id>` · `/event leave <id>` → S'inscrire / se désinscrire\n" +
+          "`/event list` → Voir tous les événements à venir\n" +
+          "`/event info <id>` → Détails et liste des inscrits\n" +
+          "`/event cancel <id>` → Annuler un événement",
+        inline: false,
+      },
+      {
+        name: "🎵 Activité & Présence",
+        value:
+          "`/activity [@membre]` → Spotify live (cover, barre de progression) + infos jeu\n" +
+          "`/whoisplaying <jeu>` → Qui joue à un jeu en ce moment\n" +
+          "`/listening` → Qui écoute Spotify sur le serveur\n" +
+          "`/sessions` → Vue d'ensemble des activités actives du serveur",
+        inline: false,
+      },
+      {
+        name: "📣 Annonces & Messages",
+        value:
+          "`/say <message> [salon]` → Faire parler le bot dans un salon\n" +
+          "`/mention <cible> [message] [salon]` → Mentionner un membre ou un rôle\n" +
+          "`/announce <message> [salon] [embed]` → Annonce @everyone\n" +
+          "`/embed <message>` → Annonce en embed stylé\n" +
+          "`/dm <user> <message>` → Envoyer un message privé via le bot",
+        inline: false,
+      },
+      {
         name: "⚙️ Configuration *(admin)*",
         value:
-          "`/permissions view` → Voir qui peut utiliser chaque catégorie\n" +
-          "`/permissions add-role|remove-role <cat> <rôle>` → Restreindre par rôle\n" +
-          "`/permissions add-user|remove-user <cat> <membre>` → Accès individuel\n" +
-          "`/permissions reset <cat>` → Remettre en accès libre\n" +
-          "`/casino config view|set|reset` → Config casino (monnaie, mises, daily, BJ…)\n" +
-          "`/autorole set|show|clear` → Rôle attribué à l'arrivée\n" +
+          "`/logs setup|status|disable` → Logs messages supprimés/modifiés + vocal\n" +
+          "`/aiwelcome setup|test|status|clear` → Message de bienvenue généré par IA\n" +
+          "`/autorole set|show|clear` → Rôle attribué automatiquement à l'arrivée\n" +
+          "`/automod enable|disable|status` → Anti-spam & détection IA de toxicité\n" +
+          "`/levels enable|disable|status` → Système de niveaux XP\n" +
+          "`/casino config view|set|reset` → Config casino (monnaie, mises, daily…)\n" +
           "`/botrole add|remove|clear|list` → Rôles requis pour utiliser le bot\n" +
-          "`/automod enable|disable|status` → Anti-spam & toxicité IA\n" +
+          "`/permissions view|add-role|remove-role|add-user|remove-user|reset` → Accès\n" +
           "`/setavatar` → Changer l'avatar du bot",
         inline: false,
       },
       {
-        name: "🎨 Annonces & MP",
+        name: "🔐 Protection *(admin)*",
         value:
-          "`/embed <message>` → Envoyer une annonce stylée dans le salon\n" +
-          "`/dm <user> <message>` → Envoyer un message privé via le bot",
+          "`/protection antinuke enable|disable|status|config` → Anti-nuke (bans/kicks/supp. massifs)\n" +
+          "`/protection antiraid enable|disable|status|config` → Anti-raid (jointures massives)\n" +
+          "`/protection antiwebhook enable|disable|status|config` → Suppression webhooks non autorisés",
         inline: false,
       },
       {
         name: "🤖 Auto-modération (automatique)",
         value:
-          "• Anti-spam pondéré (débit, doublons, mentions, liens)\n" +
+          "• Anti-spam pondéré (débit, doublons, mentions massives, liens)\n" +
           "• Détection IA de toxicité via `gpt-5-nano` — score ≥ 0.8 → suppression + warn\n" +
-          "• Score ≥ 0.95 → timeout 10 min en plus\n" +
-          "• 3 avertissements auto → kick automatique",
+          "• Score ≥ 0.95 → timeout 10 min supplémentaire\n" +
+          "• 3 avertissements auto → kick automatique\n" +
+          "• Boosters Nitro, propriétaire et modérateurs exemptés",
         inline: false,
       },
     )
