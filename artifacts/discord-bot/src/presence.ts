@@ -188,16 +188,15 @@ export interface PlayerInfo {
 }
 
 export function getPlayersOf(
-  members: Collection<Snowflake, GuildMember>,
+  guild: import("discord.js").Guild,
   query: string,
 ): PlayerInfo[] {
   const q = query.toLowerCase();
   const results: PlayerInfo[] = [];
 
-  for (const [, member] of members) {
-    if (member.user.bot) continue;
-    const presence = member.presence;
-    if (!presence) continue;
+  for (const [userId, presence] of guild.presences.cache) {
+    const member = guild.members.cache.get(userId);
+    if (!member || member.user.bot) continue;
     for (const act of presence.activities) {
       if (act.type !== ActivityType.Playing && act.type !== ActivityType.Competing) continue;
       if (!act.name.toLowerCase().includes(q)) continue;
@@ -221,14 +220,13 @@ export interface ListenerInfo {
 }
 
 export function getSpotifyListeners(
-  members: Collection<Snowflake, GuildMember>,
+  guild: import("discord.js").Guild,
 ): ListenerInfo[] {
   const results: ListenerInfo[] = [];
 
-  for (const [, member] of members) {
-    if (member.user.bot) continue;
-    const presence = member.presence;
-    if (!presence) continue;
+  for (const [userId, presence] of guild.presences.cache) {
+    const member = guild.members.cache.get(userId);
+    if (!member || member.user.bot) continue;
     for (const act of presence.activities) {
       if (act.name === "Spotify" && act.type === ActivityType.Listening) {
         results.push({ member, activity: act });
@@ -254,7 +252,7 @@ export interface SessionOverview {
 }
 
 export function getSessionOverview(
-  members: Collection<Snowflake, GuildMember>,
+  guild: import("discord.js").Guild,
 ): SessionOverview {
   const gameCounts = new Map<string, number>();
   let spotifyCount = 0;
@@ -264,10 +262,10 @@ export function getSessionOverview(
   let onlineCount = 0;
   let totalActive = 0;
 
-  for (const [, member] of members) {
-    if (member.user.bot) continue;
-    const presence = member.presence;
-    if (!presence || presence.status === "offline") continue;
+  for (const [userId, presence] of guild.presences.cache) {
+    const member = guild.members.cache.get(userId);
+    if (!member || member.user.bot) continue;
+    if (presence.status === "offline") continue;
     totalActive++;
 
     if (presence.status === "idle") idleCount++;

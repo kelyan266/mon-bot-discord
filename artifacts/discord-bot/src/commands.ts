@@ -4443,9 +4443,8 @@ async function handleWhoIsPlaying(
   const guild = interaction.guild!;
 
   await interaction.deferReply();
-  await guild.members.fetch();
 
-  const players = getPlayersOf(guild.members.cache, query);
+  const players = getPlayersOf(guild, query);
 
   if (players.length === 0) {
     await interaction.editReply({
@@ -4482,9 +4481,8 @@ async function handleListening(
   const guild = interaction.guild!;
 
   await interaction.deferReply();
-  await guild.members.fetch();
 
-  const listeners = getSpotifyListeners(guild.members.cache);
+  const listeners = getSpotifyListeners(guild);
 
   if (listeners.length === 0) {
     await interaction.editReply({
@@ -4518,9 +4516,8 @@ async function handleSessions(
   const guild = interaction.guild!;
 
   await interaction.deferReply();
-  await guild.members.fetch();
 
-  const ov = getSessionOverview(guild.members.cache);
+  const ov = getSessionOverview(guild);
 
   const topGames = [...ov.gameCounts.entries()]
     .sort((a, b) => b[1] - a[1])
