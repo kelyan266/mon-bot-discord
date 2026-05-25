@@ -47,7 +47,7 @@ export const CATEGORIES = {
     commands: new Set([
       "ping", "userstats", "channelstats", "snipe",
       "roleinfo", "stats", "membercount",
-      "poll", "quote", "embed", "dm", "help",
+      "poll", "quote", "embed", "dm", "help", "commands",
     ]),
   },
   config: {

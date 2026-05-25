@@ -383,7 +383,12 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
     },
     {
       name: "help",
-      description: "Show the list of available commands",
+      description: "Show the list of available commands (only visible to you)",
+      dm_permission: false,
+    },
+    {
+      name: "commands",
+      description: "Afficher la liste des commandes (visible par tout le monde)",
       dm_permission: false,
     },
     {
@@ -1563,7 +1568,7 @@ async function reply(
   }
 }
 
-const BOTROLE_BYPASS_COMMANDS = new Set(["botrole", "help"]);
+const BOTROLE_BYPASS_COMMANDS = new Set(["botrole", "help", "commands"]);
 
 async function checkBotRoleAccess(
   interaction: ChatInputCommandInteraction,
@@ -1682,6 +1687,8 @@ export async function handleInteraction(
       return handleEmbed(interaction);
     case "help":
       return handleHelp(interaction);
+    case "commands":
+      return handleCommands(interaction);
     case "dm":
       return handleDm(interaction);
     case "channelstats":
@@ -3877,10 +3884,8 @@ async function handleDm(
   );
 }
 
-async function handleHelp(
-  interaction: ChatInputCommandInteraction,
-): Promise<void> {
-  const embed = new EmbedBuilder()
+function buildHelpEmbed(): EmbedBuilder {
+  return new EmbedBuilder()
     .setColor(COLOR_PRIMARY)
     .setTitle("📜 Commandes disponibles")
     .setDescription(
@@ -3993,8 +3998,18 @@ async function handleHelp(
       text: `${commandDefinitions.length} commandes • Tape / pour les invoquer`,
     })
     .setTimestamp();
+}
 
-  await reply(interaction, embed, true);
+async function handleHelp(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  await reply(interaction, buildHelpEmbed(), true);
+}
+
+async function handleCommands(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  await reply(interaction, buildHelpEmbed(), false);
 }
 
 const EMBED_COLORS: Record<string, number> = {
