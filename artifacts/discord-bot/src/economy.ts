@@ -1,20 +1,18 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getCasinoConfig } from "./casinoConfig.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
 const FILE = path.join(DATA_DIR, "economy.json");
 
-export const STARTING_BALANCE = 500;
-export const DAILY_AMOUNT = 200;
-export const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-export const MIN_BET = 10;
 export const CURRENCY = "🪙";
 
 interface UserEconomy {
   balance: number;
   lastDaily?: number;
+  streak?: number;
 }
 
 interface EconomyDb {
@@ -50,64 +48,111 @@ async function persist(): Promise<void> {
   await writeLock;
 }
 
-function getUser(db: EconomyDb, guildId: string, userId: string): UserEconomy {
+async function getUser(guildId: string, userId: string): Promise<{ db: EconomyDb; user: UserEconomy }> {
+  const db = await ensureLoaded();
   db.guilds[guildId] ??= {};
-  return (db.guilds[guildId][userId] ??= { balance: STARTING_BALANCE });
+  const cfg = await getCasinoConfig(guildId);
+  db.guilds[guildId][userId] ??= { balance: cfg.startingBalance };
+  return { db, user: db.guilds[guildId][userId] };
 }
 
-export async function getBalance(
-  guildId: string,
-  userId: string,
-): Promise<number> {
-  const db = await ensureLoaded();
-  return getUser(db, guildId, userId).balance;
+export async function getBalance(guildId: string, userId: string): Promise<number> {
+  const { user } = await getUser(guildId, userId);
+  return user.balance;
 }
 
-export async function addBalance(
-  guildId: string,
-  userId: string,
-  amount: number,
-): Promise<number> {
-  const db = await ensureLoaded();
-  const user = getUser(db, guildId, userId);
+export async function addBalance(guildId: string, userId: string, amount: number): Promise<number> {
+  const { user } = await getUser(guildId, userId);
   user.balance = Math.max(0, user.balance + amount);
   await persist();
   return user.balance;
 }
 
-export async function canAfford(
-  guildId: string,
-  userId: string,
-  amount: number,
-): Promise<boolean> {
+export async function setBalance(guildId: string, userId: string, amount: number): Promise<number> {
+  const { user } = await getUser(guildId, userId);
+  user.balance = Math.max(0, amount);
+  await persist();
+  return user.balance;
+}
+
+export async function resetBalance(guildId: string, userId: string): Promise<number> {
+  const cfg = await getCasinoConfig(guildId);
+  const { user } = await getUser(guildId, userId);
+  user.balance = cfg.startingBalance;
+  user.streak = 0;
+  delete user.lastDaily;
+  await persist();
+  return user.balance;
+}
+
+export async function canAfford(guildId: string, userId: string, amount: number): Promise<boolean> {
   const bal = await getBalance(guildId, userId);
   return bal >= amount;
 }
 
+export type DailyResult =
+  | {
+      success: true;
+      balance: number;
+      earned: number;
+      streak: number;
+      bonusAmount: number;
+    }
+  | {
+      success: false;
+      remainingMs: number;
+      streak: number;
+    };
+
 export async function claimDaily(
   guildId: string,
   userId: string,
-): Promise<{ success: true; balance: number } | { success: false; remainingMs: number }> {
-  const db = await ensureLoaded();
-  const user = getUser(db, guildId, userId);
+): Promise<DailyResult> {
+  const cfg = await getCasinoConfig(guildId);
+  const { user } = await getUser(guildId, userId);
   const now = Date.now();
-  if (user.lastDaily && now - user.lastDaily < DAILY_COOLDOWN_MS) {
-    return { success: false, remainingMs: DAILY_COOLDOWN_MS - (now - user.lastDaily) };
+  const cooldownMs = cfg.dailyCooldownHours * 60 * 60 * 1000;
+
+  if (user.lastDaily && now - user.lastDaily < cooldownMs) {
+    return { success: false, remainingMs: cooldownMs - (now - user.lastDaily), streak: user.streak ?? 0 };
   }
-  user.balance += DAILY_AMOUNT;
+
+  let streak = user.streak ?? 0;
+  if (cfg.dailyStreakBonus) {
+    const gracePeriodMs = cooldownMs + 2 * 60 * 60 * 1000;
+    if (user.lastDaily && now - user.lastDaily <= gracePeriodMs) {
+      streak = Math.min(streak + 1, 30);
+    } else {
+      streak = 0;
+    }
+    user.streak = streak;
+  }
+
+  const bonusAmount = cfg.dailyStreakBonus
+    ? Math.floor(cfg.dailyAmount * Math.min(streak, 7) * 0.1)
+    : 0;
+  const earned = cfg.dailyAmount + bonusAmount;
+  user.balance += earned;
   user.lastDaily = now;
   await persist();
-  return { success: true, balance: user.balance };
+
+  return { success: true, balance: user.balance, earned, streak, bonusAmount };
 }
 
-export async function getLeaderboard(
+export async function getEconomyLeaderboard(
   guildId: string,
   limit = 10,
-): Promise<Array<{ userId: string; balance: number }>> {
+  offset = 0,
+): Promise<Array<{ userId: string; balance: number; streak: number }>> {
   const db = await ensureLoaded();
   const guild = db.guilds[guildId] ?? {};
   return Object.entries(guild)
-    .map(([userId, data]) => ({ userId, balance: data.balance }))
+    .map(([userId, data]) => ({ userId, balance: data.balance, streak: data.streak ?? 0 }))
     .sort((a, b) => b.balance - a.balance)
-    .slice(0, limit);
+    .slice(offset, offset + limit);
+}
+
+export async function getEconomyTotal(guildId: string): Promise<number> {
+  const db = await ensureLoaded();
+  return Object.keys(db.guilds[guildId] ?? {}).length;
 }

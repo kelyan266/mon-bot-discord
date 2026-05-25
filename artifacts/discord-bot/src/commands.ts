@@ -33,7 +33,9 @@ import { getSnipe } from "./snipes.js";
 import {
   handleBalance,
   handleBlackjack,
+  handleCasinoConfig,
   handleDaily,
+  handleEconomy,
   handleRoulette,
   handleSlots,
 } from "./casino.js";
@@ -612,6 +614,155 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "casino",
+      description: "⚙️ Configuration du système casino (admin)",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.SubcommandGroup,
+          name: "config",
+          description: "Gérer la configuration casino du serveur",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "view",
+              description: "Voir la configuration actuelle",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "set",
+              description: "Modifier une valeur de configuration",
+              options: [
+                {
+                  type: ApplicationCommandOptionType.String,
+                  name: "clé",
+                  description: "Paramètre à modifier",
+                  required: true,
+                  choices: [
+                    { name: "💰 Solde de départ", value: "startingBalance" },
+                    { name: "🎁 Récompense daily", value: "dailyAmount" },
+                    { name: "⏳ Cooldown daily (heures)", value: "dailyCooldownHours" },
+                    { name: "🔥 Bonus streak daily (true/false)", value: "dailyStreakBonus" },
+                    { name: "⬇️ Mise minimale", value: "minBet" },
+                    { name: "⬆️ Mise maximale (0=illimité)", value: "maxBet" },
+                    { name: "💱 Devise (emoji)", value: "currency" },
+                    { name: "📺 Salon casino (#salon ou none)", value: "casinoChannelId" },
+                    { name: "♠ Payout BJ naturel (150 ou 250)", value: "bjNaturalPayout" },
+                    { name: "🎰 Multiplicateur jackpot 7", value: "slotsJackpotMultiplier" },
+                  ],
+                },
+                {
+                  type: ApplicationCommandOptionType.String,
+                  name: "valeur",
+                  description: "Nouvelle valeur",
+                  required: true,
+                },
+              ],
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "reset",
+              description: "Remettre la config aux valeurs par défaut",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: "economy",
+      description: "💰 Gestion de l'économie du serveur",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "top",
+          description: "Classement des membres les plus riches",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "page",
+              description: "Page",
+              required: false,
+              min_value: 1,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "give",
+          description: "Admin : donner des pièces à un membre",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "utilisateur",
+              description: "Membre",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "montant",
+              description: "Quantité à donner",
+              required: true,
+              min_value: 1,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "take",
+          description: "Admin : retirer des pièces à un membre",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "utilisateur",
+              description: "Membre",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "montant",
+              description: "Quantité à retirer",
+              required: true,
+              min_value: 1,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "set",
+          description: "Admin : fixer le solde d'un membre",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "utilisateur",
+              description: "Membre",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "montant",
+              description: "Nouveau solde",
+              required: true,
+              min_value: 0,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "reset",
+          description: "Admin : remettre le solde d'un membre au solde de départ",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "utilisateur",
+              description: "Membre",
+              required: true,
+            },
+          ],
+        },
+      ],
+    },
+    {
       name: "balance",
       description: "Voir le solde de pièces d'un membre",
       dm_permission: false,
@@ -626,7 +777,7 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
     },
     {
       name: "daily",
-      description: "Réclame ta récompense quotidienne de 200 🪙",
+      description: "Réclame ta récompense quotidienne",
       dm_permission: false,
     },
     {
@@ -1373,6 +1524,10 @@ export async function handleInteraction(
       return handleBotRole(interaction);
     case "ticket":
       return handleTicket(interaction);
+    case "casino":
+      return handleCasinoConfig(interaction);
+    case "economy":
+      return handleEconomy(interaction);
     case "balance":
       return handleBalance(interaction);
     case "daily":
