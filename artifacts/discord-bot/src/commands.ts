@@ -78,6 +78,14 @@ import {
   saveLoggingConfig,
 } from "./logging.js";
 import {
+  buildActivityEmbed,
+  buildSpotifyEmbed,
+  buildGameEmbed,
+  getPlayersOf,
+  getSpotifyListeners,
+  getSessionOverview,
+} from "./presence.js";
+import {
   buildPollComponents,
   buildPollEmbed,
   castVote,
@@ -1546,6 +1554,42 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "activity",
+      description: "Voir l'activité actuelle d'un membre (Spotify, jeu, stream…)",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "membre",
+          description: "Membre à inspecter (défaut : toi)",
+          required: false,
+        },
+      ],
+    },
+    {
+      name: "whoisplaying",
+      description: "Voir qui joue à un jeu sur le serveur",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "jeu",
+          description: "Nom du jeu (recherche partielle)",
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "listening",
+      description: "Voir qui écoute Spotify en ce moment",
+      dm_permission: false,
+    },
+    {
+      name: "sessions",
+      description: "Vue d'ensemble des activités actuelles du serveur",
+      dm_permission: false,
+    },
+    {
       name: "logs",
       description: "Configurer le système de logs du serveur",
       default_member_permissions: PermissionFlagsBits.ManageGuild.toString(),
@@ -2132,6 +2176,14 @@ export async function handleInteraction(
       return handleAiWelcome(interaction);
     case "logs":
       return handleLogs(interaction);
+    case "activity":
+      return handleActivity(interaction);
+    case "whoisplaying":
+      return handleWhoIsPlaying(interaction);
+    case "listening":
+      return handleListening(interaction);
+    case "sessions":
+      return handleSessions(interaction);
     case "event":
       return handleEvent(interaction);
     case "protection":
@@ -4329,6 +4381,188 @@ async function handleDm(
       .setTimestamp(),
     true,
   );
+}
+
+async function handleActivity(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const target = interaction.options.getMember("membre") as GuildMember | null;
+  const member = target ?? (interaction.member as GuildMember);
+
+  if (!member.presence || member.presence.status === "offline") {
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setDescription(`⚫ **${member.user.username}** est hors ligne ou ne partage pas sa présence.`),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const embeds = buildActivityEmbed(member);
+
+  if (embeds.length === 0) {
+    const statusEmoji: Record<string, string> = {
+      online: "🟢",
+      idle: "🌙",
+      dnd: "🔴",
+      offline: "⚫",
+    };
+    const emoji = statusEmoji[member.presence.status] ?? "⚫";
+    const customActivity = member.presence.activities.find(
+      (a) => a.type === ActivityType.Custom,
+    );
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setAuthor({
+            name: member.user.username,
+            iconURL: member.user.displayAvatarURL(),
+          })
+          .setDescription(
+            `${emoji} **${member.presence.status}**` +
+              (customActivity?.state ? `\n✨ ${customActivity.state}` : "") +
+              "\n\nAucune activité détectée.",
+          ),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.reply({ embeds: embeds.slice(0, 10) });
+}
+
+async function handleWhoIsPlaying(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const query = interaction.options.getString("jeu", true);
+  const guild = interaction.guild!;
+
+  await interaction.deferReply();
+  await guild.members.fetch();
+
+  const players = getPlayersOf(guild.members.cache, query);
+
+  if (players.length === 0) {
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setDescription(`🎮 Personne ne joue à **${query}** en ce moment.`),
+      ],
+    });
+    return;
+  }
+
+  const lines = players.slice(0, 20).map(({ member, activity, sessionMs }) => {
+    const session = sessionMs != null
+      ? ` • ${Math.floor(sessionMs / 60_000)} min`
+      : "";
+    const detail = activity.details ? ` — *${activity.details}*` : "";
+    return `<@${member.id}>${session}${detail}`;
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(`🎮 Joueurs — ${players[0]!.activity.name}`)
+    .setDescription(lines.join("\n"))
+    .setFooter({ text: `${players.length} membre${players.length > 1 ? "s" : ""} trouvé${players.length > 1 ? "s" : ""}` })
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleListening(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+
+  await interaction.deferReply();
+  await guild.members.fetch();
+
+  const listeners = getSpotifyListeners(guild.members.cache);
+
+  if (listeners.length === 0) {
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x1db954)
+          .setDescription("🎵 Personne n'écoute Spotify en ce moment."),
+      ],
+    });
+    return;
+  }
+
+  const lines = listeners.slice(0, 20).map(({ member, activity }) => {
+    const track = activity.details ?? "?";
+    const artist = activity.state ?? "?";
+    return `<@${member.id}> — **${track}** • *${artist}*`;
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor(0x1db954)
+    .setTitle(`🎵 Écoute Spotify — ${listeners.length} membre${listeners.length > 1 ? "s" : ""}`)
+    .setDescription(lines.join("\n"))
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleSessions(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+
+  await interaction.deferReply();
+  await guild.members.fetch();
+
+  const ov = getSessionOverview(guild.members.cache);
+
+  const topGames = [...ov.gameCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([name, count]) => `\`${count}\` ${name}`)
+    .join("\n");
+
+  const embed = new EmbedBuilder()
+    .setColor(COLOR_PRIMARY)
+    .setTitle(`📊 Sessions — ${guild.name}`)
+    .addFields(
+      {
+        name: "👥 Membres actifs",
+        value: [
+          `🟢 En ligne : **${ov.onlineCount}**`,
+          `🌙 Inactif : **${ov.idleCount}**`,
+          `🔴 Ne pas déranger : **${ov.dndCount}**`,
+        ].join("\n"),
+        inline: true,
+      },
+      {
+        name: "🎮 Jeux / Activités",
+        value: [
+          `🎮 Jeux différents : **${ov.gameCounts.size}**`,
+          `🎵 Spotify : **${ov.spotifyCount}**`,
+          `📺 Streams : **${ov.streamingCount}**`,
+        ].join("\n"),
+        inline: true,
+      },
+    );
+
+  if (topGames) {
+    embed.addFields({
+      name: "🏆 Top jeux",
+      value: topGames || "—",
+      inline: false,
+    });
+  }
+
+  embed.setFooter({ text: `Total visible : ${ov.totalActive} membres` }).setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
 }
 
 async function handleLogs(

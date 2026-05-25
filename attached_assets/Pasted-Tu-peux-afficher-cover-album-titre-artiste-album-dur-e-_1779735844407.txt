@@ -1,0 +1,187 @@
+Tu peux afficher :
+cover album
+titre
+artiste
+album
+durée
+barre progression live
+bouton Spotify
+activité depuis combien de temps
+Bonus premium
+/spotifycard
+
+Carte style :
+
+Discord profile
+neon
+animated
+🎮 Jeux détectables
+
+Discord Presence permet voir :
+
+Roblox
+Minecraft
+Valorant
+Fortnite
+VSCode
+Chrome
+etc.
+🔥 Infos très stylées à afficher
+Pour un jeu :
+nom
+durée session
+map/rank si dispo
+détails rich presence
+état :
+menu
+ranked
+lobby
+Exemple Roblox
+🎮 Roblox
+
+🕒 Playing for:
+42 minutes
+
+📍 Activity:
+In Experience
+
+💻 Platform:
+Desktop
+🧠 Commandes autour de ça
+/activity history
+
+Historique activités :
+
+jeux récents
+spotify récent
+temps passé
+/topgames
+
+Top jeux du membre.
+
+/musicstats
+
+Stats Spotify :
+
+artistes favoris
+genres
+temps écoute
+/sessions
+
+Sessions actuelles du serveur :
+
+qui joue à quoi
+combien jouent ensemble
+👑 Version ULTRA premium
+/presence live
+
+Embed qui s’update toutes les 5 sec :
+
+chanson actuelle
+progression
+changement jeu
+status
+📊 Dashboard activité
+
+Pages :
+
+Page 1 — Overview
+status
+devices
+activité actuelle
+Page 2 — Gaming
+jeux
+temps session
+Page 3 — Spotify
+musique live
+Page 4 — History
+activités récentes
+🎨 UI recommandée
+Couleurs dynamiques
+
+Spotify → vert
+Roblox → gris
+Valorant → rouge
+Minecraft → vert pixel
+
+🔥 Fonctionnalités rares
+/whoisplaying
+
+Qui joue au même jeu.
+
+/listening
+
+Qui écoute Spotify.
+
+/party
+
+Détecte groupes dans même jeu.
+
+/gamingstats
+
+Top jeux serveur.
+
+💻 Techniquement
+
+Tu peux utiliser :
+
+Discord.js
+member.presence.activities
+Types d’activités
+
+Discord retourne :
+
+PLAYING
+LISTENING
+STREAMING
+WATCHING
+CUSTOM
+COMPETING
+Exemple récupération
+const activities = member.presence?.activities;
+🚀 Effet “wow”
+
+Le plus impressionnant :
+
+✅ progression Spotify live
+✅ images dynamiques
+✅ session timer
+✅ pagination
+✅ actualisation live
+✅ cartes graphiques
+✅ détection devices
+✅ présence ultra détaillée
+
+💎 Noms stylés pour la commande
+/presence
+/activity
+/now
+/session
+/live
+/status
+/vibe
+/track
+🧠 Tu peux même aller encore plus loin
+/vibe
+
+Analyse humeur via :
+
+musique
+jeu
+status
+/focus
+
+Détecte :
+
+coding
+gaming
+music
+idle
+/multiactivity
+
+Quand quelqu’un :
+
+écoute Spotify
+joue
+stream
+en même temps.
