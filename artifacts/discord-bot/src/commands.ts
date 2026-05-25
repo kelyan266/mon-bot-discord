@@ -394,6 +394,56 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "say",
+      description: "Faire parler le bot dans un salon",
+      default_member_permissions: PermissionFlagsBits.ManageMessages.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "message",
+          description: "Message à envoyer",
+          required: true,
+          max_length: 2000,
+        },
+        {
+          type: ApplicationCommandOptionType.Channel,
+          name: "salon",
+          description: "Salon cible (défaut : salon actuel)",
+          required: false,
+          channel_types: [ChannelType.GuildText],
+        },
+      ],
+    },
+    {
+      name: "announce",
+      description: "Envoyer une annonce @everyone avec le bot",
+      default_member_permissions: PermissionFlagsBits.MentionEveryone.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "message",
+          description: "Contenu de l'annonce",
+          required: true,
+          max_length: 1900,
+        },
+        {
+          type: ApplicationCommandOptionType.Channel,
+          name: "salon",
+          description: "Salon cible (défaut : salon actuel)",
+          required: false,
+          channel_types: [ChannelType.GuildText],
+        },
+        {
+          type: ApplicationCommandOptionType.Boolean,
+          name: "embed",
+          description: "Envoyer sous forme d'embed stylé (défaut : non)",
+          required: false,
+        },
+      ],
+    },
+    {
       name: "dm",
       description: "Send a direct message to a member as the server",
       default_member_permissions:
@@ -2188,6 +2238,10 @@ export async function handleInteraction(
       return handleEvent(interaction);
     case "protection":
       return handleProtection(interaction);
+    case "say":
+      return handleSay(interaction);
+    case "announce":
+      return handleAnnounce(interaction);
     case "dm":
       return handleDm(interaction);
     case "channelstats":
@@ -4316,6 +4370,80 @@ async function handleChannelStats(
       .setTimestamp(),
     true,
   );
+}
+
+async function handleSay(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const message = interaction.options.getString("message", true);
+  const channelOption = interaction.options.getChannel("salon");
+  const target = (channelOption ?? interaction.channel) as TextChannel;
+
+  if (!target?.isTextBased()) {
+    await interaction.reply({ content: "❌ Salon introuvable ou invalide.", ephemeral: true });
+    return;
+  }
+
+  try {
+    await (target as TextChannel).send({ content: message, allowedMentions: { parse: [] } });
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setDescription(`✅ Message envoyé dans <#${target.id}>.`),
+      ],
+      ephemeral: true,
+    });
+  } catch {
+    await interaction.reply({ content: "❌ Je n'ai pas la permission d'envoyer des messages dans ce salon.", ephemeral: true });
+  }
+}
+
+async function handleAnnounce(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const message = interaction.options.getString("message", true);
+  const channelOption = interaction.options.getChannel("salon");
+  const useEmbed = interaction.options.getBoolean("embed") ?? false;
+  const target = (channelOption ?? interaction.channel) as TextChannel;
+
+  if (!target?.isTextBased()) {
+    await interaction.reply({ content: "❌ Salon introuvable ou invalide.", ephemeral: true });
+    return;
+  }
+
+  try {
+    if (useEmbed) {
+      await (target as TextChannel).send({
+        content: "@everyone",
+        embeds: [
+          new EmbedBuilder()
+            .setColor(COLOR_PRIMARY)
+            .setTitle("📢 Annonce")
+            .setDescription(message)
+            .setFooter({ text: `Annonce par ${interaction.user.username}` })
+            .setTimestamp(),
+        ],
+        allowedMentions: { parse: ["everyone"] },
+      });
+    } else {
+      await (target as TextChannel).send({
+        content: `@everyone\n${message}`,
+        allowedMentions: { parse: ["everyone"] },
+      });
+    }
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setDescription(`✅ Annonce envoyée dans <#${target.id}>.`),
+      ],
+      ephemeral: true,
+    });
+  } catch {
+    await interaction.reply({ content: "❌ Je n'ai pas la permission d'envoyer des messages ou de mentionner @everyone dans ce salon.", ephemeral: true });
+  }
 }
 
 async function handleDm(
