@@ -60,6 +60,19 @@ import {
   setWelcomeConfig,
 } from "./aiWelcome.js";
 import {
+  cancelEvent,
+  createEvent,
+  getEvent,
+  getGuildEvents,
+  joinEvent,
+  leaveEvent,
+  parseDateTimeToTimestamp,
+} from "./events.js";
+import {
+  getProtectionConfig,
+  saveProtectionConfig,
+} from "./antinuke.js";
+import {
   buildPollComponents,
   buildPollEmbed,
   castVote,
@@ -1528,6 +1541,319 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "event",
+      description: "Créer et gérer des événements sur le serveur",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "create",
+          description: "Créer un nouvel événement",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "titre",
+              description: "Titre de l'événement",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "description",
+              description: "Description de l'événement",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "date",
+              description: "Date de l'événement (format JJ/MM/AAAA)",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "heure",
+              description: "Heure de début (format HH:MM)",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "places",
+              description: "Nombre maximum de participants (0 = illimité)",
+              required: false,
+              min_value: 0,
+              max_value: 1000,
+            },
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "rappel",
+              description: "Envoyer un rappel X minutes avant le début (défaut: 15)",
+              required: false,
+              min_value: 1,
+              max_value: 1440,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "join",
+          description: "Rejoindre un événement",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "ID de l'événement",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "leave",
+          description: "Quitter un événement",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "ID de l'événement",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "list",
+          description: "Voir tous les événements à venir",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "info",
+          description: "Détails d'un événement",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "ID de l'événement",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "cancel",
+          description: "Annuler un événement (créateur ou admin)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "ID de l'événement",
+              required: true,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: "protection",
+      description: "Configurer les protections anti-nuke, anti-raid et anti-webhook",
+      default_member_permissions: PermissionFlagsBits.Administrator.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.SubcommandGroup,
+          name: "antinuke",
+          description: "Protection contre les nukes (bans/kicks/suppressions massives)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "enable",
+              description: "Activer l'anti-nuke",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "disable",
+              description: "Désactiver l'anti-nuke",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "status",
+              description: "Voir la configuration anti-nuke",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "config",
+              description: "Modifier les seuils de détection",
+              options: [
+                {
+                  type: ApplicationCommandOptionType.Integer,
+                  name: "bans",
+                  description: "Seuil de bans (défaut: 3)",
+                  required: false,
+                  min_value: 1,
+                  max_value: 20,
+                },
+                {
+                  type: ApplicationCommandOptionType.Integer,
+                  name: "kicks",
+                  description: "Seuil de kicks (défaut: 5)",
+                  required: false,
+                  min_value: 1,
+                  max_value: 20,
+                },
+                {
+                  type: ApplicationCommandOptionType.Integer,
+                  name: "salons",
+                  description: "Seuil de suppressions de salons (défaut: 3)",
+                  required: false,
+                  min_value: 1,
+                  max_value: 20,
+                },
+                {
+                  type: ApplicationCommandOptionType.Integer,
+                  name: "roles",
+                  description: "Seuil de suppressions de rôles (défaut: 3)",
+                  required: false,
+                  min_value: 1,
+                  max_value: 20,
+                },
+                {
+                  type: ApplicationCommandOptionType.Integer,
+                  name: "fenetre",
+                  description: "Fenêtre de détection en secondes (défaut: 10)",
+                  required: false,
+                  min_value: 3,
+                  max_value: 60,
+                },
+                {
+                  type: ApplicationCommandOptionType.String,
+                  name: "action",
+                  description: "Action à prendre (défaut: strip)",
+                  required: false,
+                  choices: [
+                    { name: "Strip (retirer les rôles)", value: "strip" },
+                    { name: "Kick", value: "kick" },
+                    { name: "Ban", value: "ban" },
+                  ],
+                },
+                {
+                  type: ApplicationCommandOptionType.Channel,
+                  name: "alerte",
+                  description: "Salon d'alerte",
+                  required: false,
+                  channel_types: [ChannelType.GuildText],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.SubcommandGroup,
+          name: "antiraid",
+          description: "Protection contre les raids (jointures massives)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "enable",
+              description: "Activer l'anti-raid",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "disable",
+              description: "Désactiver l'anti-raid",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "status",
+              description: "Voir la configuration anti-raid",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "config",
+              description: "Modifier les paramètres de détection",
+              options: [
+                {
+                  type: ApplicationCommandOptionType.Integer,
+                  name: "seuil",
+                  description: "Nombre de jointures pour déclencher (défaut: 10)",
+                  required: false,
+                  min_value: 2,
+                  max_value: 50,
+                },
+                {
+                  type: ApplicationCommandOptionType.Integer,
+                  name: "fenetre",
+                  description: "Fenêtre de détection en secondes (défaut: 10)",
+                  required: false,
+                  min_value: 3,
+                  max_value: 60,
+                },
+                {
+                  type: ApplicationCommandOptionType.String,
+                  name: "action",
+                  description: "Action sur les membres suspects",
+                  required: false,
+                  choices: [
+                    { name: "Kick", value: "kick" },
+                    { name: "Ban", value: "ban" },
+                    { name: "Timeout 10 min", value: "timeout" },
+                  ],
+                },
+                {
+                  type: ApplicationCommandOptionType.Integer,
+                  name: "age-min",
+                  description: "Âge minimum du compte en jours (défaut: 7)",
+                  required: false,
+                  min_value: 0,
+                  max_value: 365,
+                },
+                {
+                  type: ApplicationCommandOptionType.Channel,
+                  name: "alerte",
+                  description: "Salon d'alerte",
+                  required: false,
+                  channel_types: [ChannelType.GuildText],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.SubcommandGroup,
+          name: "antiwebhook",
+          description: "Protection contre les webhooks non autorisés",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "enable",
+              description: "Activer l'anti-webhook",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "disable",
+              description: "Désactiver l'anti-webhook",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "status",
+              description: "Voir le statut de l'anti-webhook",
+            },
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: "config",
+              description: "Configurer le salon d'alerte",
+              options: [
+                {
+                  type: ApplicationCommandOptionType.Channel,
+                  name: "alerte",
+                  description: "Salon d'alerte",
+                  required: true,
+                  channel_types: [ChannelType.GuildText],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
       name: "aiwelcome",
       description: "Configurer le message de bienvenue généré par IA",
       default_member_permissions: PermissionFlagsBits.ManageGuild.toString(),
@@ -1755,6 +2081,10 @@ export async function handleInteraction(
       return handleCommands(interaction);
     case "aiwelcome":
       return handleAiWelcome(interaction);
+    case "event":
+      return handleEvent(interaction);
+    case "protection":
+      return handleProtection(interaction);
     case "dm":
       return handleDm(interaction);
     case "channelstats":
@@ -3948,6 +4278,364 @@ async function handleDm(
       .setTimestamp(),
     true,
   );
+}
+
+async function handleEvent(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guildId!;
+
+  if (sub === "create") {
+    const titre = interaction.options.getString("titre", true);
+    const description = interaction.options.getString("description", true);
+    const date = interaction.options.getString("date", true);
+    const heure = interaction.options.getString("heure", true);
+    const places = interaction.options.getInteger("places") ?? 0;
+    const rappelMinutes = interaction.options.getInteger("rappel") ?? 15;
+
+    const startTime = parseDateTimeToTimestamp(date, heure);
+    if (!startTime) {
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(COLOR_DANGER)
+            .setTitle("❌ Format invalide")
+            .setDescription(
+              "Date attendue : `JJ/MM/AAAA` — Heure attendue : `HH:MM`\n" +
+                "Exemple : `25/06/2025` et `20:00`",
+            ),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+    if (startTime <= Date.now()) {
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(COLOR_DANGER)
+            .setTitle("❌ Date passée")
+            .setDescription("L'événement doit être dans le futur."),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const event = await createEvent({
+      guildId,
+      channelId: interaction.channelId,
+      creatorId: interaction.user.id,
+      title: titre,
+      description,
+      startTime,
+      maxParticipants: places > 0 ? places : null,
+      reminderMinutes: rappelMinutes,
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor(COLOR_PRIMARY)
+      .setTitle(`📅 ${event.title}`)
+      .setDescription(event.description)
+      .addFields(
+        {
+          name: "⏰ Début",
+          value: `<t:${Math.floor(startTime / 1000)}:F> (<t:${Math.floor(startTime / 1000)}:R>)`,
+          inline: false,
+        },
+        {
+          name: "👥 Participants",
+          value: `1${event.maxParticipants ? `/${event.maxParticipants}` : ""} inscrits`,
+          inline: true,
+        },
+        {
+          name: "⏱️ Rappel",
+          value: `${rappelMinutes} min avant`,
+          inline: true,
+        },
+        {
+          name: "🆔 ID",
+          value: `\`${event.id}\``,
+          inline: true,
+        },
+      )
+      .setFooter({ text: `Organisé par ${interaction.user.username} • /event join ${event.id}` })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+    return;
+  }
+
+  if (sub === "join") {
+    const id = interaction.options.getString("id", true);
+    const result = await joinEvent(guildId, id, interaction.user.id);
+    const msgs: Record<string, string> = {
+      not_found: "❌ Aucun événement trouvé avec cet ID.",
+      already_joined: "⚠️ Tu es déjà inscrit à cet événement.",
+      full: "⚠️ Cet événement est complet.",
+      ended: "⚠️ Cet événement est terminé ou annulé.",
+    };
+    if (result !== "ok") {
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_WARN).setDescription(msgs[result]!)], ephemeral: true });
+      return;
+    }
+    const event = await getEvent(guildId, id);
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Inscription confirmée")
+          .setDescription(`Tu es maintenant inscrit à **${event?.title ?? id}**.`)
+          .addFields(
+            { name: "⏰ Début", value: `<t:${Math.floor((event?.startTime ?? 0) / 1000)}:R>`, inline: true },
+            { name: "👥 Inscrits", value: `${event?.participants.length ?? "?"}${event?.maxParticipants ? `/${event.maxParticipants}` : ""}`, inline: true },
+          ),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (sub === "leave") {
+    const id = interaction.options.getString("id", true);
+    const result = await leaveEvent(guildId, id, interaction.user.id);
+    if (result === "not_found") {
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Événement introuvable.")], ephemeral: true });
+      return;
+    }
+    if (result === "not_joined") {
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_WARN).setDescription("⚠️ Tu n'es pas inscrit à cet événement.")], ephemeral: true });
+      return;
+    }
+    await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setDescription("✅ Tu t'es désinscrit de l'événement.")], ephemeral: true });
+    return;
+  }
+
+  if (sub === "list") {
+    const events = await getGuildEvents(guildId);
+    if (events.length === 0) {
+      await interaction.reply({
+        embeds: [new EmbedBuilder().setColor(COLOR_WARN).setTitle("📅 Aucun événement").setDescription("Aucun événement à venir. Crée-en un avec `/event create`.")],
+        ephemeral: true,
+      });
+      return;
+    }
+    const embed = new EmbedBuilder()
+      .setColor(COLOR_PRIMARY)
+      .setTitle(`📅 Événements à venir (${events.length})`)
+      .setDescription(
+        events
+          .slice(0, 10)
+          .map(
+            (e) =>
+              `**${e.title}** — <t:${Math.floor(e.startTime / 1000)}:R>\n` +
+              `👥 ${e.participants.length}${e.maxParticipants ? `/${e.maxParticipants}` : ""} • \`${e.id}\``,
+          )
+          .join("\n\n"),
+      )
+      .setFooter({ text: "Utilise /event info <id> pour plus de détails" });
+    await interaction.reply({ embeds: [embed] });
+    return;
+  }
+
+  if (sub === "info") {
+    const id = interaction.options.getString("id", true);
+    const event = await getEvent(guildId, id);
+    if (!event) {
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Événement introuvable.")], ephemeral: true });
+      return;
+    }
+    const embed = new EmbedBuilder()
+      .setColor(COLOR_PRIMARY)
+      .setTitle(`📅 ${event.title}`)
+      .setDescription(event.description)
+      .addFields(
+        { name: "⏰ Début", value: `<t:${Math.floor(event.startTime / 1000)}:F>\n<t:${Math.floor(event.startTime / 1000)}:R>`, inline: true },
+        { name: "👥 Participants", value: `${event.participants.length}${event.maxParticipants ? `/${event.maxParticipants}` : " inscrits"}`, inline: true },
+        { name: "🆔 ID", value: `\`${event.id}\``, inline: true },
+        { name: "📣 Salon", value: `<#${event.channelId}>`, inline: true },
+        { name: "🎙️ Organisateur", value: `<@${event.creatorId}>`, inline: true },
+        { name: "⏱️ Rappel", value: `${event.reminderMinutes} min avant`, inline: true },
+        {
+          name: "📋 Liste",
+          value: event.participants.map((id) => `<@${id}>`).join(", ") || "—",
+          inline: false,
+        },
+      )
+      .setTimestamp(event.startTime);
+    await interaction.reply({ embeds: [embed] });
+    return;
+  }
+
+  if (sub === "cancel") {
+    const id = interaction.options.getString("id", true);
+    const event = await getEvent(guildId, id);
+    if (!event) {
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Événement introuvable.")], ephemeral: true });
+      return;
+    }
+    const isAdmin =
+      typeof interaction.member?.permissions !== "string" &&
+      interaction.member?.permissions.has("ManageGuild");
+    if (event.creatorId !== interaction.user.id && !isAdmin) {
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Seul le créateur ou un admin peut annuler cet événement.")], ephemeral: true });
+      return;
+    }
+    await cancelEvent(guildId, id);
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Événement annulé")
+          .setDescription(`**${event.title}** a été annulé.`)
+          .addFields({ name: "Inscrits notifiés", value: `${event.participants.length} membre(s)`, inline: true }),
+      ],
+    });
+  }
+}
+
+async function handleProtection(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const group = interaction.options.getSubcommandGroup(true) as
+    | "antinuke"
+    | "antiraid"
+    | "antiwebhook";
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guildId!;
+  const cfg = await getProtectionConfig(guildId);
+
+  if (group === "antinuke") {
+    if (sub === "enable") {
+      cfg.antinuke.enabled = true;
+      await saveProtectionConfig(guildId, cfg);
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setTitle("🛡️ Anti-Nuke activé").setDescription("Le bot surveille maintenant les actions massives (bans, kicks, suppressions de salons/rôles).")], ephemeral: true });
+      return;
+    }
+    if (sub === "disable") {
+      cfg.antinuke.enabled = false;
+      await saveProtectionConfig(guildId, cfg);
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_WARN).setTitle("🛡️ Anti-Nuke désactivé")], ephemeral: true });
+      return;
+    }
+    if (sub === "status") {
+      const n = cfg.antinuke;
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(n.enabled ? COLOR_SUCCESS : COLOR_WARN)
+            .setTitle(`🛡️ Anti-Nuke — ${n.enabled ? "Actif ✅" : "Inactif ⚠️"}`)
+            .addFields(
+              { name: "Seuil bans", value: `${n.banThreshold}`, inline: true },
+              { name: "Seuil kicks", value: `${n.kickThreshold}`, inline: true },
+              { name: "Seuil salons supprimés", value: `${n.channelDeleteThreshold}`, inline: true },
+              { name: "Seuil rôles supprimés", value: `${n.roleDeleteThreshold}`, inline: true },
+              { name: "Fenêtre", value: `${n.windowSeconds}s`, inline: true },
+              { name: "Action", value: n.action, inline: true },
+              { name: "Salon alerte", value: n.alertChannelId ? `<#${n.alertChannelId}>` : "—", inline: true },
+            ),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+    if (sub === "config") {
+      if (interaction.options.getInteger("bans") !== null) cfg.antinuke.banThreshold = interaction.options.getInteger("bans")!;
+      if (interaction.options.getInteger("kicks") !== null) cfg.antinuke.kickThreshold = interaction.options.getInteger("kicks")!;
+      if (interaction.options.getInteger("salons") !== null) cfg.antinuke.channelDeleteThreshold = interaction.options.getInteger("salons")!;
+      if (interaction.options.getInteger("roles") !== null) cfg.antinuke.roleDeleteThreshold = interaction.options.getInteger("roles")!;
+      if (interaction.options.getInteger("fenetre") !== null) cfg.antinuke.windowSeconds = interaction.options.getInteger("fenetre")!;
+      const action = interaction.options.getString("action");
+      if (action) cfg.antinuke.action = action as "ban" | "kick" | "strip";
+      const alerte = interaction.options.getChannel("alerte");
+      if (alerte) cfg.antinuke.alertChannelId = alerte.id;
+      await saveProtectionConfig(guildId, cfg);
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setTitle("✅ Anti-Nuke mis à jour").setDescription("Configuration sauvegardée.")], ephemeral: true });
+      return;
+    }
+  }
+
+  if (group === "antiraid") {
+    if (sub === "enable") {
+      cfg.antiraid.enabled = true;
+      await saveProtectionConfig(guildId, cfg);
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setTitle("🚨 Anti-Raid activé").setDescription("Le bot surveille maintenant les jointures massives.")], ephemeral: true });
+      return;
+    }
+    if (sub === "disable") {
+      cfg.antiraid.enabled = false;
+      await saveProtectionConfig(guildId, cfg);
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_WARN).setTitle("🚨 Anti-Raid désactivé")], ephemeral: true });
+      return;
+    }
+    if (sub === "status") {
+      const r = cfg.antiraid;
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(r.enabled ? COLOR_SUCCESS : COLOR_WARN)
+            .setTitle(`🚨 Anti-Raid — ${r.enabled ? "Actif ✅" : "Inactif ⚠️"}`)
+            .addFields(
+              { name: "Seuil jointures", value: `${r.joinThreshold}`, inline: true },
+              { name: "Fenêtre", value: `${r.windowSeconds}s`, inline: true },
+              { name: "Action", value: r.action, inline: true },
+              { name: "Âge min. compte", value: `${r.minAccountAgeDays} jours`, inline: true },
+              { name: "Salon alerte", value: r.alertChannelId ? `<#${r.alertChannelId}>` : "—", inline: true },
+            ),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+    if (sub === "config") {
+      if (interaction.options.getInteger("seuil") !== null) cfg.antiraid.joinThreshold = interaction.options.getInteger("seuil")!;
+      if (interaction.options.getInteger("fenetre") !== null) cfg.antiraid.windowSeconds = interaction.options.getInteger("fenetre")!;
+      const action = interaction.options.getString("action");
+      if (action) cfg.antiraid.action = action as "kick" | "ban" | "timeout";
+      if (interaction.options.getInteger("age-min") !== null) cfg.antiraid.minAccountAgeDays = interaction.options.getInteger("age-min")!;
+      const alerte = interaction.options.getChannel("alerte");
+      if (alerte) cfg.antiraid.alertChannelId = alerte.id;
+      await saveProtectionConfig(guildId, cfg);
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setTitle("✅ Anti-Raid mis à jour")], ephemeral: true });
+      return;
+    }
+  }
+
+  if (group === "antiwebhook") {
+    if (sub === "enable") {
+      cfg.antiwebhook.enabled = true;
+      await saveProtectionConfig(guildId, cfg);
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setTitle("🕸️ Anti-Webhook activé").setDescription("Les nouveaux webhooks seront supprimés automatiquement.")], ephemeral: true });
+      return;
+    }
+    if (sub === "disable") {
+      cfg.antiwebhook.enabled = false;
+      await saveProtectionConfig(guildId, cfg);
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_WARN).setTitle("🕸️ Anti-Webhook désactivé")], ephemeral: true });
+      return;
+    }
+    if (sub === "status") {
+      const w = cfg.antiwebhook;
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(w.enabled ? COLOR_SUCCESS : COLOR_WARN)
+            .setTitle(`🕸️ Anti-Webhook — ${w.enabled ? "Actif ✅" : "Inactif ⚠️"}`)
+            .addFields({ name: "Salon alerte", value: w.alertChannelId ? `<#${w.alertChannelId}>` : "—", inline: true }),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+    if (sub === "config") {
+      const alerte = interaction.options.getChannel("alerte", true);
+      cfg.antiwebhook.alertChannelId = alerte.id;
+      await saveProtectionConfig(guildId, cfg);
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setTitle("✅ Anti-Webhook mis à jour").addFields({ name: "Salon alerte", value: `<#${alerte.id}>`, inline: true })], ephemeral: true });
+      return;
+    }
+  }
 }
 
 function buildHelpEmbed(): EmbedBuilder {

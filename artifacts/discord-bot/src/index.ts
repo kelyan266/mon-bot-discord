@@ -25,6 +25,12 @@ import {
   generateWelcomeMessage,
   getWelcomeConfig,
 } from "./aiWelcome.js";
+import { checkEventReminders } from "./events.js";
+import {
+  handleAuditLogEntry,
+  handleMemberJoinRaid,
+  handleWebhookUpdate,
+} from "./antinuke.js";
 import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
 import { getRolesUpToLevel } from "./levelRoles.js";
@@ -60,6 +66,7 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildModeration,
   ],
 });
 
@@ -444,6 +451,27 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 });
 
+// Anti-raid detection (separate listener so it runs independently)
+client.on(Events.GuildMemberAdd, (member) => {
+  void handleMemberJoinRaid(member, client).catch((err) =>
+    console.error("Anti-raid handler failed:", err),
+  );
+});
+
+// Anti-nuke: audit log entry tracking
+client.on(Events.GuildAuditLogEntryCreate, (entry, guild) => {
+  void handleAuditLogEntry(entry, guild, client).catch((err) =>
+    console.error("Anti-nuke handler failed:", err),
+  );
+});
+
+// Anti-webhook: detect new webhooks
+client.on(Events.WebhooksUpdate, (channel) => {
+  void handleWebhookUpdate(channel, client).catch((err) =>
+    console.error("Anti-webhook handler failed:", err),
+  );
+});
+
 interface VoiceSession {
   guildId: string;
   channelId: string;
@@ -508,6 +536,13 @@ setInterval(() => {
         .catch((err) => console.error("Voice XP failed:", err));
     });
   }
+}, 60_000).unref();
+
+// Event reminders: check every minute
+setInterval(() => {
+  void checkEventReminders(client).catch((err) =>
+    console.error("Event reminder check failed:", err),
+  );
 }, 60_000).unref();
 
 async function announceLevelUp(message: Message, level: number): Promise<void> {
