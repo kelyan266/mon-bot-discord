@@ -3,13 +3,18 @@ import {
   ActivityType,
   ApplicationCommandOptionType,
   ButtonBuilder,
+  ButtonInteraction,
   ButtonStyle,
   ChannelType,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  Guild,
   GuildMember,
   PermissionFlagsBits,
   PermissionsBitField,
+  StringSelectMenuBuilder,
+  StringSelectMenuInteraction,
+  StringSelectMenuOptionBuilder,
   UserFlags,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
   type TextChannel,
@@ -33,9 +38,29 @@ import {
   handleSlots,
 } from "./casino.js";
 import {
+  buildPollComponents,
+  buildPollEmbed,
+  castVote,
+  createPoll,
+  endPoll,
+  setPollMessage,
+} from "./polls.js";
+import {
+  addQuote,
+  deleteQuote,
+  getRandomQuote,
+  listQuotes,
+} from "./quotes.js";
+import {
   getChannelStats,
   getChannelStatsSummary,
 } from "./channelStats.js";
+import {
+  getActiveMembers24h,
+  getFullLeaderboard,
+  getLeaderboardTotal,
+  type LbSortBy,
+} from "./levels.js";
 import {
   adjustXp,
   getLeaderboard,
@@ -430,7 +455,160 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
     },
     {
       name: "leaderboard",
-      description: "Show the top 10 members by XP",
+      description: "🏆 Classement du serveur (XP, messages, temps vocal) avec pagination",
+      dm_permission: false,
+    },
+    {
+      name: "roleinfo",
+      description: "📋 Informations détaillées sur un rôle",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Role,
+          name: "role",
+          description: "Rôle à inspecter",
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "poll",
+      description: "📊 Système de sondage interactif",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "create",
+          description: "Créer un sondage avec boutons de vote",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "question",
+              description: "Question du sondage",
+              required: true,
+              max_length: 200,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "option1",
+              description: "Option 1",
+              required: true,
+              max_length: 80,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "option2",
+              description: "Option 2",
+              required: true,
+              max_length: 80,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "option3",
+              description: "Option 3 (optionnel)",
+              required: false,
+              max_length: 80,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "option4",
+              description: "Option 4 (optionnel)",
+              required: false,
+              max_length: 80,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "option5",
+              description: "Option 5 (optionnel)",
+              required: false,
+              max_length: 80,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "end",
+          description: "Terminer un sondage et afficher les résultats finaux",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "ID du sondage (visible dans l'embed)",
+              required: true,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: "quote",
+      description: "💬 Système de citations du serveur",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "random",
+          description: "Afficher une citation aléatoire",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "add",
+          description: "Ajouter une nouvelle citation",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "texte",
+              description: "La citation à ajouter",
+              required: true,
+              max_length: 1000,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "auteur",
+              description: "Nom de l'auteur (optionnel)",
+              required: false,
+              max_length: 100,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "delete",
+          description: "Supprimer une citation par son ID",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "id",
+              description: "ID de la citation",
+              required: true,
+              min_value: 1,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "list",
+          description: "Lister les citations du serveur",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "page",
+              description: "Numéro de page",
+              required: false,
+              min_value: 1,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: "stats",
+      description: "📊 Dashboard global du serveur",
+      dm_permission: false,
+    },
+    {
+      name: "membercount",
+      description: "👥 Carte des membres du serveur en temps réel",
       dm_permission: false,
     },
     {
@@ -1205,6 +1383,16 @@ export async function handleInteraction(
       return handleBlackjack(interaction);
     case "roulette":
       return handleRoulette(interaction);
+    case "roleinfo":
+      return handleRoleInfo(interaction);
+    case "poll":
+      return handlePoll(interaction);
+    case "quote":
+      return handleQuote(interaction);
+    case "stats":
+      return handleStats(interaction);
+    case "membercount":
+      return handleMemberCount(interaction);
     default:
       await reply(
         interaction,
@@ -3100,42 +3288,146 @@ async function handleLevel(
   );
 }
 
+const LB_PAGE_SIZE = 10;
+
+async function buildLeaderboardMessage(
+  guild: Guild,
+  type: LbSortBy,
+  page: number,
+): Promise<{
+  embed: EmbedBuilder;
+  components: (ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>)[];
+}> {
+  const total = await getLeaderboardTotal(guild.id);
+  const totalPages = Math.max(1, Math.ceil(total / LB_PAGE_SIZE));
+  const safePage = Math.max(1, Math.min(page, totalPages));
+  const offset = (safePage - 1) * LB_PAGE_SIZE;
+  const entries = await getFullLeaderboard(guild.id, type, LB_PAGE_SIZE, offset);
+
+  const typeConfig: Record<LbSortBy, { icon: string; label: string }> = {
+    xp: { icon: "🏆", label: "XP & Niveaux" },
+    messages: { icon: "💬", label: "Messages" },
+    voice: { icon: "🎙️", label: "Temps Vocal" },
+  };
+  const { icon, label } = typeConfig[type];
+  const medals = ["🥇", "🥈", "🥉"];
+
+  const lines =
+    entries.length === 0
+      ? "*Aucune donnée disponible — écrivez des messages pour apparaître !*"
+      : entries
+          .map((e, i) => {
+            const rank = offset + i + 1;
+            const prefix = medals[rank - 1] ?? `**${rank}.**`;
+            let val: string;
+            if (type === "xp")
+              val = `Niv. **${e.level}** · ${e.xp.toLocaleString("fr-FR")} XP`;
+            else if (type === "messages")
+              val = `**${e.messageCount.toLocaleString("fr-FR")}** messages`;
+            else {
+              const h = Math.floor(e.voiceMinutes / 60);
+              const m = e.voiceMinutes % 60;
+              val = h > 0 ? `**${h}h ${m}min** vocal` : `**${m}min** vocal`;
+            }
+            return `${prefix} <@${e.userId}> — ${val}`;
+          })
+          .join("\n");
+
+  const embed = new EmbedBuilder()
+    .setColor(COLOR_PRIMARY)
+    .setTitle(`${icon} Classement — ${label}`)
+    .setDescription(lines)
+    .setThumbnail(guild.iconURL() ?? null)
+    .setFooter({
+      text: `Page ${safePage}/${totalPages} · ${total} membres · ${guild.name}`,
+    })
+    .setTimestamp();
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId("lb_select")
+    .setPlaceholder("Changer de classement…")
+    .addOptions(
+      new StringSelectMenuOptionBuilder()
+        .setLabel("🏆 XP & Niveaux")
+        .setValue("xp")
+        .setDefault(type === "xp"),
+      new StringSelectMenuOptionBuilder()
+        .setLabel("💬 Messages")
+        .setValue("messages")
+        .setDefault(type === "messages"),
+      new StringSelectMenuOptionBuilder()
+        .setLabel("🎙️ Temps Vocal")
+        .setValue("voice")
+        .setDefault(type === "voice"),
+    );
+
+  const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+  const prevBtn = new ButtonBuilder()
+    .setCustomId(`lb_prev_${type}_${safePage}`)
+    .setLabel("◀ Précédent")
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(safePage <= 1);
+  const pageBtn = new ButtonBuilder()
+    .setCustomId("lb_noop")
+    .setLabel(`Page ${safePage} / ${totalPages}`)
+    .setStyle(ButtonStyle.Primary)
+    .setDisabled(true);
+  const nextBtn = new ButtonBuilder()
+    .setCustomId(`lb_next_${type}_${safePage}`)
+    .setLabel("Suivant ▶")
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(safePage >= totalPages);
+
+  const navRow = new ActionRowBuilder<ButtonBuilder>().addComponents(prevBtn, pageBtn, nextBtn);
+
+  return { embed, components: [selectRow, navRow] };
+}
+
 async function handleLeaderboard(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   const guild = interaction.guild!;
-  const entries = await getLeaderboard(guild.id, 10);
+  const { embed, components } = await buildLeaderboardMessage(guild, "xp", 1);
+  await interaction.reply({ embeds: [embed], components });
+}
 
-  if (entries.length === 0) {
-    await reply(
-      interaction,
-      new EmbedBuilder()
-        .setColor(COLOR_PRIMARY)
-        .setTitle("🏆 Classement XP")
-        .setDescription("Personne n'a encore gagné d'XP sur ce serveur."),
-      true,
-    );
+export async function handleLeaderboardButton(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const parts = interaction.customId.split("_");
+  const action = parts[1];
+  const type = parts[2] as LbSortBy;
+  const currentPage = parseInt(parts[3], 10);
+  const newPage = action === "prev" ? currentPage - 1 : currentPage + 1;
+  const guild = interaction.guild!;
+  const { embed, components } = await buildLeaderboardMessage(guild, type, newPage);
+  await interaction.update({ embeds: [embed], components });
+}
+
+export async function handleLeaderboardSelect(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const type = interaction.values[0] as LbSortBy;
+  const guild = interaction.guild!;
+  const { embed, components } = await buildLeaderboardMessage(guild, type, 1);
+  await interaction.update({ embeds: [embed], components });
+}
+
+export async function handlePollVote(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const parts = interaction.customId.split("_");
+  const pollId = parts[1];
+  const optIdx = parseInt(parts[2], 10);
+  const { poll } = await castVote(pollId, interaction.user.id, optIdx);
+  if (!poll) {
+    await interaction.reply({ content: "❌ Ce sondage est introuvable ou terminé.", ephemeral: true });
     return;
   }
-
-  const medals = ["🥇", "🥈", "🥉"];
-  const lines = entries
-    .map((e, i) => {
-      const prefix = medals[i] ?? `**${i + 1}.**`;
-      return `${prefix} <@${e.userId}> — Niveau **${e.level}** · ${e.xp.toLocaleString("fr-FR")} XP`;
-    })
-    .join("\n");
-
-  await reply(
-    interaction,
-    new EmbedBuilder()
-      .setColor(COLOR_PRIMARY)
-      .setTitle("🏆 Classement XP")
-      .setDescription(lines)
-      .setFooter({ text: `Top ${entries.length} sur ${guild.name}` })
-      .setTimestamp(),
-    false,
-  );
+  const embed = buildPollEmbed(poll);
+  const rows = buildPollComponents(poll);
+  await interaction.update({ embeds: [embed], components: rows });
 }
 
 async function handleChannelStats(
@@ -3290,7 +3582,7 @@ async function handleHelp(
         name: "📈 Niveaux",
         value:
           "`/level` → Voir ton niveau et ta progression\n" +
-          "`/leaderboard` → Top 10 du serveur\n" +
+              "`/leaderboard` → Classement XP / Messages / Vocal avec menu et pagination\n" +
           "`/levelrole set|remove|list` → Récompenses de rôle par niveau\n" +
           "`/xp give|take|set|reset` → Admin : ajuster l'XP d'un membre",
       },
@@ -3306,6 +3598,20 @@ async function handleHelp(
           "`/autorole set` → Rôle auto à l'arrivée\n" +
           "`/autorole show` → Voir le rôle auto\n" +
           "`/autorole clear` → Désactiver le rôle auto",
+      },
+      {
+        name: "📋 Infos & Stats",
+        value:
+          "`/roleinfo <rôle>` → Infos complètes d'un rôle (membres, perms, couleur)\n" +
+          "`/stats` → Dashboard global du serveur\n" +
+          "`/membercount` → Carte des membres en temps réel",
+      },
+      {
+        name: "📊 Sondages & Citations",
+        value:
+          "`/poll create <question> <opt1> <opt2> ...` → Sondage avec boutons vote live\n" +
+          "`/poll end <id>` → Terminer un sondage\n" +
+          "`/quote random|add|delete|list` → Système de citations du serveur",
       },
       {
         name: "🎰 Casino",
@@ -3626,6 +3932,304 @@ async function handleAutoRole(
       .setDescription("Unknown subcommand."),
     true,
   );
+}
+
+async function handleRoleInfo(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const role = interaction.options.getRole("role", true);
+  const guildRole = guild.roles.cache.get(role.id);
+  if (!guildRole) {
+    await reply(interaction, new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Rôle introuvable."), true);
+    return;
+  }
+
+  const memberCount = guildRole.members.size;
+  const colorHex = guildRole.color !== 0 ? `#${guildRole.color.toString(16).padStart(6, "0").toUpperCase()}` : "Par défaut";
+  const createdAt = Math.floor(guildRole.createdTimestamp / 1000);
+
+  const permList = [
+    [PermissionFlagsBits.Administrator, "👑 Administrateur"],
+    [PermissionFlagsBits.ManageGuild, "🏠 Gérer le serveur"],
+    [PermissionFlagsBits.ManageRoles, "🎭 Gérer les rôles"],
+    [PermissionFlagsBits.ManageChannels, "📁 Gérer les salons"],
+    [PermissionFlagsBits.KickMembers, "👢 Expulser"],
+    [PermissionFlagsBits.BanMembers, "🔨 Bannir"],
+    [PermissionFlagsBits.ModerateMembers, "⏰ Timeout"],
+    [PermissionFlagsBits.ManageMessages, "🗑️ Gérer messages"],
+    [PermissionFlagsBits.MentionEveryone, "📢 @everyone"],
+    [PermissionFlagsBits.SendMessages, "💬 Envoyer messages"],
+    [PermissionFlagsBits.Connect, "🔊 Rejoindre vocal"],
+    [PermissionFlagsBits.Speak, "🎙️ Parler"],
+    [PermissionFlagsBits.ViewChannel, "👁️ Voir salons"],
+  ] as const;
+
+  const perms = permList
+    .filter(([flag]) => guildRole.permissions.has(flag))
+    .map(([, label]) => label);
+
+  const embed = new EmbedBuilder()
+    .setColor(guildRole.color || COLOR_PRIMARY)
+    .setTitle(`🎭 Rôle : ${guildRole.name}`)
+    .addFields(
+      { name: "🆔 ID", value: `\`${guildRole.id}\``, inline: true },
+      { name: "🎨 Couleur", value: colorHex, inline: true },
+      { name: "👥 Membres", value: `**${memberCount}**`, inline: true },
+      { name: "📅 Créé le", value: `<t:${createdAt}:F> (<t:${createdAt}:R>)`, inline: false },
+      { name: "📌 Mentionnable", value: guildRole.mentionable ? "✅ Oui" : "❌ Non", inline: true },
+      { name: "🔼 Affiché séparément", value: guildRole.hoist ? "✅ Oui" : "❌ Non", inline: true },
+      { name: "🤖 Géré (intégration)", value: guildRole.managed ? "✅ Oui" : "❌ Non", inline: true },
+      { name: "🔑 Position", value: `**#${guildRole.position}**`, inline: true },
+      {
+        name: `⚙️ Permissions (${perms.length})`,
+        value: perms.length > 0 ? perms.join(" · ") : "Aucune permission notable",
+        inline: false,
+      },
+    )
+    .setFooter({ text: guild.name })
+    .setTimestamp();
+
+  await reply(interaction, embed, false);
+}
+
+async function handlePoll(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "create") {
+    const question = interaction.options.getString("question", true);
+    const options: string[] = [
+      interaction.options.getString("option1", true),
+      interaction.options.getString("option2", true),
+    ];
+    for (const key of ["option3", "option4", "option5"] as const) {
+      const v = interaction.options.getString(key);
+      if (v) options.push(v);
+    }
+
+    const poll = await createPoll(guild.id, interaction.channelId, interaction.user.id, question, options);
+    const embed = buildPollEmbed(poll);
+    const rows = buildPollComponents(poll);
+    const msg = await interaction.reply({ embeds: [embed], components: rows, fetchReply: true });
+    await setPollMessage(poll.id, msg.id);
+    return;
+  }
+
+  if (sub === "end") {
+    const id = interaction.options.getString("id", true);
+    const poll = await endPoll(id);
+    if (!poll) {
+      await reply(interaction, new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Sondage introuvable."), true);
+      return;
+    }
+    if (poll.guildId !== guild.id) {
+      await reply(interaction, new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Ce sondage n'appartient pas à ce serveur."), true);
+      return;
+    }
+    const embed = buildPollEmbed(poll);
+    await reply(interaction, embed.setTitle(`📊 [TERMINÉ] ${poll.question}`), false);
+  }
+}
+
+async function handleQuote(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "random") {
+    const quote = await getRandomQuote(guild.id);
+    if (!quote) {
+      await reply(interaction, new EmbedBuilder().setColor(COLOR_WARN).setDescription("📭 Aucune citation enregistrée. Utilise `/quote add` pour en ajouter."), true);
+      return;
+    }
+    const embed = new EmbedBuilder()
+      .setColor(COLOR_PRIMARY)
+      .setDescription(`> *${quote.text}*`)
+      .addFields(
+        { name: "✍️ Auteur", value: quote.author ?? "Anonyme", inline: true },
+        { name: "🆔 ID", value: `#${quote.id}`, inline: true },
+        { name: "📅 Ajoutée", value: `<t:${Math.floor(quote.addedAt / 1000)}:R>`, inline: true },
+      )
+      .setFooter({ text: `Ajoutée par · /quote random pour une autre` });
+    await reply(interaction, embed, false);
+    return;
+  }
+
+  if (sub === "add") {
+    const text = interaction.options.getString("texte", true);
+    const author = interaction.options.getString("auteur") ?? undefined;
+    const quote = await addQuote(guild.id, text, author, interaction.user.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Citation ajoutée")
+        .setDescription(`> *${quote.text}*`)
+        .addFields(
+          { name: "Auteur", value: quote.author ?? "Anonyme", inline: true },
+          { name: "ID", value: `#${quote.id}`, inline: true },
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "delete") {
+    const id = interaction.options.getInteger("id", true);
+    const deleted = await deleteQuote(guild.id, id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(deleted ? COLOR_SUCCESS : COLOR_WARN)
+        .setDescription(deleted ? `✅ Citation **#${id}** supprimée.` : `⚠️ Citation **#${id}** introuvable.`),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "list") {
+    const page = interaction.options.getInteger("page") ?? 1;
+    const result = await listQuotes(guild.id, page);
+
+    if (result.total === 0) {
+      await reply(interaction, new EmbedBuilder().setColor(COLOR_WARN).setDescription("📭 Aucune citation. Utilise `/quote add` pour commencer."), true);
+      return;
+    }
+
+    const lines = result.quotes
+      .map((q) => `**#${q.id}** ${q.author ? `*(${q.author})*` : ""} — ${q.text.slice(0, 80)}${q.text.length > 80 ? "…" : ""}`)
+      .join("\n");
+
+    const embed = new EmbedBuilder()
+      .setColor(COLOR_PRIMARY)
+      .setTitle(`💬 Citations de ${guild.name}`)
+      .setDescription(lines)
+      .setFooter({ text: `Page ${result.page}/${result.totalPages} · ${result.total} citation(s) au total` });
+
+    await reply(interaction, embed, false);
+  }
+}
+
+async function handleStats(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  await interaction.deferReply();
+
+  const channelList = getChannelStats(guild.id);
+  const summary = getChannelStatsSummary(guild.id);
+  const active24h = await getActiveMembers24h(guild.id);
+  const topXp = await getFullLeaderboard(guild.id, "xp", 3, 0);
+  const topMsg = await getFullLeaderboard(guild.id, "messages", 3, 0);
+  const topCh = channelList.slice(0, 3);
+
+  const humanCount = guild.members.cache.filter((m) => !m.user.bot).size;
+  const botCount = guild.members.cache.filter((m) => m.user.bot).size;
+  const ownerId = guild.ownerId;
+
+  const topXpStr = topXp.length > 0
+    ? topXp.map((e, i) => `${["🥇","🥈","🥉"][i]} <@${e.userId}> — Niv. ${e.level}`).join("\n")
+    : "Pas encore de données";
+
+  const topMsgStr = topMsg.length > 0
+    ? topMsg.map((e, i) => `${["🥇","🥈","🥉"][i]} <@${e.userId}> — ${e.messageCount.toLocaleString("fr-FR")} msgs`).join("\n")
+    : "Pas encore de données";
+
+  const topChStr = topCh.length > 0
+    ? topCh.map((c, i) => {
+        const ch = guild.channels.cache.get(c.channelId);
+        return `${["🥇","🥈","🥉"][i]} ${ch ? `<#${c.channelId}>` : `\`${c.channelId}\``} — ${c.count} msgs`;
+      }).join("\n")
+    : "Pas encore de données (depuis le dernier redémarrage)";
+
+  const createdAt = Math.floor(guild.createdTimestamp / 1000);
+
+  const embed = new EmbedBuilder()
+    .setColor(COLOR_PRIMARY)
+    .setTitle(`📊 Dashboard — ${guild.name}`)
+    .setThumbnail(guild.iconURL() ?? null)
+    .addFields(
+      {
+        name: "👥 Membres",
+        value: `Total : **${guild.memberCount}** · Humains : **${humanCount}** · Bots : **${botCount}**`,
+        inline: false,
+      },
+      { name: "💬 Messages (session)", value: `**${summary.totalMessages.toLocaleString("fr-FR")}**`, inline: true },
+      { name: "📺 Salons actifs", value: `**${summary.activeChannels}**`, inline: true },
+      { name: "🟢 Actifs 24h", value: `**${active24h}** membres`, inline: true },
+      { name: "👑 Propriétaire", value: `<@${ownerId}>`, inline: true },
+      { name: "📅 Créé le", value: `<t:${createdAt}:D>`, inline: true },
+      { name: "🚀 Boosts", value: `**${guild.premiumSubscriptionCount ?? 0}** (Niveau **${guild.premiumTier}**)`, inline: true },
+      { name: "🏆 Top XP", value: topXpStr, inline: true },
+      { name: "💬 Top Messages", value: topMsgStr, inline: true },
+      { name: "📺 Top Salons", value: topChStr, inline: true },
+    )
+    .setFooter({ text: `ID : ${guild.id}` })
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleMemberCount(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  await interaction.deferReply();
+
+  await guild.members.fetch().catch(() => null);
+
+  const total = guild.memberCount;
+  const humans = guild.members.cache.filter((m) => !m.user.bot).size;
+  const bots = guild.members.cache.filter((m) => m.user.bot).size;
+  const online = guild.members.cache.filter(
+    (m) => !m.user.bot && (m.presence?.status === "online" || m.presence?.status === "idle" || m.presence?.status === "dnd"),
+  ).size;
+  const offline = humans - online;
+
+  const boostLevel = guild.premiumTier;
+  const boostCount = guild.premiumSubscriptionCount ?? 0;
+  const boostEmoji = ["", "🥉", "🥈", "🥇"][boostLevel] ?? "🏆";
+
+  const bar = (v: number, t: number, width = 12) => {
+    const filled = t > 0 ? Math.round((v / t) * width) : 0;
+    return "█".repeat(filled) + "░".repeat(width - filled);
+  };
+
+  const createdAt = Math.floor(guild.createdTimestamp / 1000);
+
+  const embed = new EmbedBuilder()
+    .setColor(0x2ecc71)
+    .setTitle(`👥 ${guild.name}`)
+    .setThumbnail(guild.iconURL() ?? null)
+    .addFields(
+      {
+        name: "📊 Membres totaux",
+        value: `${"█".repeat(12)} **${total.toLocaleString("fr-FR")}** membres`,
+        inline: false,
+      },
+      {
+        name: "🟢 En ligne / inactif / dnd",
+        value: `${bar(online, humans)} **${online}** / **${humans}** humains`,
+        inline: false,
+      },
+      { name: "👤 Humains", value: `**${humans}**`, inline: true },
+      { name: "🤖 Bots", value: `**${bots}**`, inline: true },
+      { name: "⚫ Hors-ligne", value: `**${offline}**`, inline: true },
+      {
+        name: `${boostEmoji} Niveau de boost`,
+        value: `Niveau **${boostLevel}** · **${boostCount}** boost${boostCount !== 1 ? "s" : ""}`,
+        inline: false,
+      },
+      { name: "📅 Serveur créé", value: `<t:${createdAt}:F> (<t:${createdAt}:R>)`, inline: false },
+    )
+    .setFooter({ text: `ID : ${guild.id} · Mis à jour` })
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
 }
 
 async function handleSlowmode(

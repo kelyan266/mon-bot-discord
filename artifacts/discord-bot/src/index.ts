@@ -10,7 +10,13 @@ import {
   type Message,
   type VoiceState,
 } from "discord.js";
-import { commandDefinitions, handleInteraction } from "./commands.js";
+import {
+  commandDefinitions,
+  handleInteraction,
+  handleLeaderboardButton,
+  handleLeaderboardSelect,
+  handlePollVote,
+} from "./commands.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
@@ -128,8 +134,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await handleBlackjackButton(interaction);
         return;
       }
+      if (interaction.customId.startsWith("lb_") && interaction.customId !== "lb_noop") {
+        await handleLeaderboardButton(interaction);
+        return;
+      }
+      if (interaction.customId.startsWith("poll_")) {
+        await handlePollVote(interaction);
+        return;
+      }
     } catch (err) {
       console.error("Button interaction error:", err);
+    }
+    return;
+  }
+
+  if (interaction.isStringSelectMenu()) {
+    try {
+      if (interaction.customId === "lb_select") {
+        await handleLeaderboardSelect(interaction);
+      }
+    } catch (err) {
+      console.error("Select menu interaction error:", err);
     }
     return;
   }

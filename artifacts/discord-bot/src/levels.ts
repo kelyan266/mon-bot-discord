@@ -16,6 +16,8 @@ export interface LevelEntry {
   xp: number;
   level: number;
   lastMessageAt: number;
+  messageCount?: number;
+  voiceMinutes?: number;
 }
 
 interface LevelsDb {
@@ -85,9 +87,11 @@ function getEntry(db: LevelsDb, guildId: string, userId: string): LevelEntry {
   const guild = db.users[guildId] ?? (db.users[guildId] = {});
   let entry = guild[userId];
   if (!entry) {
-    entry = { xp: 0, level: 0, lastMessageAt: 0 };
+    entry = { xp: 0, level: 0, lastMessageAt: 0, messageCount: 0, voiceMinutes: 0 };
     guild[userId] = entry;
   }
+  entry.messageCount ??= 0;
+  entry.voiceMinutes ??= 0;
   return entry;
 }
 
@@ -105,6 +109,8 @@ export async function addMessageXp(
 ): Promise<XpGainResult | null> {
   const db = await ensureLoaded();
   const entry = getEntry(db, guildId, userId);
+  entry.messageCount = (entry.messageCount ?? 0) + 1;
+  dirty = true;
   const now = Date.now();
   if (now - entry.lastMessageAt < MESSAGE_COOLDOWN_MS) return null;
 
@@ -120,6 +126,7 @@ export async function addVoiceXp(
 ): Promise<XpGainResult> {
   const db = await ensureLoaded();
   const entry = getEntry(db, guildId, userId);
+  entry.voiceMinutes = (entry.voiceMinutes ?? 0) + 1;
   return applyXp(entry, VOICE_XP_PER_TICK);
 }
 
@@ -263,6 +270,52 @@ export function progressToNextLevel(xp: number): {
     totalForNext,
     percent,
   };
+}
+
+export type LbSortBy = "xp" | "messages" | "voice";
+
+export async function getFullLeaderboard(
+  guildId: string,
+  sortBy: LbSortBy,
+  limit = 10,
+  offset = 0,
+): Promise<
+  Array<{
+    userId: string;
+    xp: number;
+    level: number;
+    messageCount: number;
+    voiceMinutes: number;
+  }>
+> {
+  const db = await ensureLoaded();
+  const guild = db.users[guildId];
+  if (!guild) return [];
+  const entries = Object.entries(guild).map(([userId, e]) => ({
+    userId,
+    xp: e.xp,
+    level: e.level,
+    messageCount: e.messageCount ?? 0,
+    voiceMinutes: e.voiceMinutes ?? 0,
+  }));
+  const key =
+    sortBy === "xp" ? "xp" : sortBy === "messages" ? "messageCount" : "voiceMinutes";
+  entries.sort((a, b) => b[key] - a[key]);
+  return entries.slice(offset, offset + limit);
+}
+
+export async function getLeaderboardTotal(guildId: string): Promise<number> {
+  const db = await ensureLoaded();
+  const guild = db.users[guildId];
+  return guild ? Object.keys(guild).length : 0;
+}
+
+export async function getActiveMembers24h(guildId: string): Promise<number> {
+  const db = await ensureLoaded();
+  const guild = db.users[guildId];
+  if (!guild) return 0;
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  return Object.values(guild).filter((e) => e.lastMessageAt > cutoff).length;
 }
 
 export async function shutdownFlush(): Promise<void> {
