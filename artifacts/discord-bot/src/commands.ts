@@ -53,6 +53,13 @@ import {
   handleSlots,
 } from "./casino.js";
 import {
+  clearWelcomeConfig,
+  generateWelcomeMessage,
+  getToneLabel,
+  getWelcomeConfig,
+  setWelcomeConfig,
+} from "./aiWelcome.js";
+import {
   buildPollComponents,
   buildPollEmbed,
   castVote,
@@ -1520,6 +1527,63 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
         },
       ],
     },
+    {
+      name: "aiwelcome",
+      description: "Configurer le message de bienvenue généré par IA",
+      default_member_permissions: PermissionFlagsBits.ManageGuild.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "setup",
+          description: "Définir le salon et le ton du message de bienvenue IA",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Channel,
+              name: "salon",
+              description: "Salon où envoyer les messages de bienvenue",
+              required: true,
+              channel_types: [ChannelType.GuildText],
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "ton",
+              description: "Style du message généré par IA",
+              required: false,
+              choices: [
+                { name: "Chaleureux & accueillant", value: "friendly" },
+                { name: "Formel & professionnel", value: "formal" },
+                { name: "Drôle & décalé", value: "funny" },
+                { name: "Hype & enthousiaste", value: "hype" },
+              ],
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "test",
+          description: "Tester le message de bienvenue IA dans ce salon",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "membre",
+              description: "Membre à simuler (par défaut : toi-même)",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "status",
+          description: "Voir la configuration actuelle du welcome IA",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "clear",
+          description: "Désactiver les messages de bienvenue IA",
+        },
+      ],
+    },
   ];
 
 function moderatableMember(
@@ -1689,6 +1753,8 @@ export async function handleInteraction(
       return handleHelp(interaction);
     case "commands":
       return handleCommands(interaction);
+    case "aiwelcome":
+      return handleAiWelcome(interaction);
     case "dm":
       return handleDm(interaction);
     case "channelstats":
@@ -4010,6 +4076,151 @@ async function handleCommands(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   await reply(interaction, buildHelpEmbed(), false);
+}
+
+async function handleAiWelcome(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guildId!;
+  const guild = interaction.guild!;
+
+  if (sub === "setup") {
+    const channel = interaction.options.getChannel("salon", true);
+    const tone = interaction.options.getString("ton") ?? "friendly";
+
+    if (channel.type !== ChannelType.GuildText) {
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setTitle("❌ Salon invalide")
+            .setDescription("Tu dois choisir un salon textuel."),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await setWelcomeConfig(guildId, { channelId: channel.id, tone });
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setTitle("✅ Welcome IA configuré")
+          .setDescription(
+            "À chaque nouvelle arrivée, un message de bienvenue généré par IA sera envoyé dans ce salon.\n" +
+            "Utilise `/aiwelcome test` pour l'essayer.",
+          )
+          .addFields(
+            { name: "Salon", value: `<#${channel.id}>`, inline: true },
+            { name: "Ton", value: getToneLabel(tone), inline: true },
+          ),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (sub === "test") {
+    const targetUser =
+      interaction.options.getUser("membre") ?? interaction.user;
+    const config = await getWelcomeConfig(guildId);
+
+    if (!config) {
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setTitle("❌ Pas de configuration")
+            .setDescription(
+              "Configure d'abord le welcome avec `/aiwelcome setup`.",
+            ),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+    const memberCount = guild.memberCount;
+    const message = await generateWelcomeMessage(
+      targetUser.username,
+      guild.name,
+      memberCount,
+      config.tone,
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle(`👋 Bienvenue sur ${guild.name} !`)
+      .setDescription(message)
+      .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: "Membre", value: `<@${targetUser.id}>`, inline: true },
+        { name: "N° de membre", value: `#${memberCount}`, inline: true },
+      )
+      .setFooter({
+        text: "⚠️ Aperçu — le vrai message sera envoyé dans le salon configuré.",
+      })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
+  if (sub === "status") {
+    const config = await getWelcomeConfig(guildId);
+
+    if (!config) {
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xfee75c)
+            .setTitle("⚙️ Welcome IA — Non configuré")
+            .setDescription(
+              "Utilise `/aiwelcome setup` pour activer les messages de bienvenue.",
+            ),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x5865f2)
+          .setTitle("⚙️ Welcome IA — Configuration actuelle")
+          .addFields(
+            { name: "Salon", value: `<#${config.channelId}>`, inline: true },
+            { name: "Ton", value: getToneLabel(config.tone), inline: true },
+            { name: "Statut", value: "✅ Actif", inline: true },
+          ),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (sub === "clear") {
+    const removed = await clearWelcomeConfig(guildId);
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(removed ? 0x57f287 : 0xfee75c)
+          .setTitle(
+            removed ? "✅ Welcome IA désactivé" : "⚠️ Déjà désactivé",
+          )
+          .setDescription(
+            removed
+              ? "Les messages de bienvenue générés par IA ont été désactivés."
+              : "Le welcome IA n'était pas activé sur ce serveur.",
+          ),
+      ],
+      ephemeral: true,
+    });
+  }
 }
 
 const EMBED_COLORS: Record<string, number> = {

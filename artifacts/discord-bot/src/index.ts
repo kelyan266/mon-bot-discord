@@ -21,6 +21,10 @@ import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
 import { saveSnipe } from "./snipes.js";
+import {
+  generateWelcomeMessage,
+  getWelcomeConfig,
+} from "./aiWelcome.js";
 import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
 import { getRolesUpToLevel } from "./levelRoles.js";
@@ -112,6 +116,44 @@ client.once(Events.ClientReady, async (c) => {
 
 client.on(Events.GuildCreate, () => updatePresence());
 client.on(Events.GuildDelete, () => updatePresence());
+
+client.on(Events.GuildMemberAdd, async (member) => {
+  if (!member.guild) return;
+  try {
+    const config = await getWelcomeConfig(member.guild.id);
+    if (!config) return;
+
+    const channel = member.guild.channels.cache.get(config.channelId);
+    if (!channel || !channel.isTextBased()) return;
+
+    const memberCount = member.guild.memberCount;
+    const message = await generateWelcomeMessage(
+      member.user.username,
+      member.guild.name,
+      memberCount,
+      config.tone,
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle(`👋 Bienvenue sur ${member.guild.name} !`)
+      .setDescription(message)
+      .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: "Membre", value: `<@${member.id}>`, inline: true },
+        { name: "N° de membre", value: `#${memberCount}`, inline: true },
+      )
+      .setFooter({ text: `ID : ${member.id}` })
+      .setTimestamp();
+
+    await (channel as import("discord.js").TextChannel).send({
+      content: `<@${member.id}>`,
+      embeds: [embed],
+    });
+  } catch (err) {
+    console.error("AI welcome failed:", err);
+  }
+});
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
