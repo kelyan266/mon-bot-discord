@@ -45,21 +45,24 @@ import {
   setLevelRole,
 } from "./levelRoles.js";
 import {
+  addTicketSupportRole,
   buildPanel,
   getTicketConfig,
   handleTicketClose,
   removeTicket,
+  removeTicketSupportRole,
   saveTicketConfig,
 } from "./tickets.js";
 import {
+  addBotRole,
   addKeepRole,
-  clearBotRole,
+  clearBotRoles,
   clearKeepRoles,
-  getBotRole,
+  getBotRoles,
   getGuildSettings,
   getKeepRoles,
+  removeBotRole,
   removeKeepRole,
-  setBotRole,
   setAutomodEnabled,
   setXpEnabled,
 } from "./settings.js";
@@ -478,14 +481,8 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
         {
           type: ApplicationCommandOptionType.Subcommand,
           name: "setup",
-          description: "Configure the ticket system (support role, category, log channel)",
+          description: "Configure the ticket system (category, log channel)",
           options: [
-            {
-              type: ApplicationCommandOptionType.Role,
-              name: "role",
-              description: "Support role that can see all tickets",
-              required: false,
-            },
             {
               type: ApplicationCommandOptionType.Channel,
               name: "category",
@@ -558,6 +555,32 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
           type: ApplicationCommandOptionType.Subcommand,
           name: "config",
           description: "Show the current ticket system configuration",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "addsupportrole",
+          description: "Add a support role that can see and manage tickets",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Support role to add",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "removesupportrole",
+          description: "Remove a support role from the ticket system",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Support role to remove",
+              required: true,
+            },
+          ],
         },
         {
           type: ApplicationCommandOptionType.Subcommand,
@@ -657,20 +680,33 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
     },
     {
       name: "botrole",
-      description: "Configure which role is required to use bot commands",
+      description: "Configure which roles can use bot commands",
       default_member_permissions:
         PermissionFlagsBits.Administrator.toString(),
       dm_permission: false,
       options: [
         {
           type: ApplicationCommandOptionType.Subcommand,
-          name: "set",
-          description: "Set the role required to use bot commands",
+          name: "add",
+          description: "Add a role to the authorized list",
           options: [
             {
               type: ApplicationCommandOptionType.Role,
               name: "role",
-              description: "Role members must have to use any bot command",
+              description: "Role to authorize",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "remove",
+          description: "Remove a role from the authorized list",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Role to remove",
               required: true,
             },
           ],
@@ -678,12 +714,12 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
         {
           type: ApplicationCommandOptionType.Subcommand,
           name: "clear",
-          description: "Remove the restriction — everyone can use the bot",
+          description: "Clear all restrictions — everyone can use the bot",
         },
         {
           type: ApplicationCommandOptionType.Subcommand,
-          name: "show",
-          description: "Show the currently required role",
+          name: "list",
+          description: "Show all authorized roles",
         },
       ],
     },
@@ -969,22 +1005,25 @@ async function checkBotRoleAccess(
     return true;
   if (interaction.guild.ownerId === interaction.user.id) return true;
 
-  const requiredRoleId = await getBotRole(interaction.guild.id);
-  if (!requiredRoleId) return true;
+  const requiredRoleIds = await getBotRoles(interaction.guild.id);
+  if (requiredRoleIds.length === 0) return true;
 
-  const hasRole = Array.isArray(member.roles)
-    ? member.roles.includes(requiredRoleId)
-    : member.roles.cache.has(requiredRoleId);
+  const memberRoles = member.roles;
+  const hasRole = Array.isArray(memberRoles)
+    ? requiredRoleIds.some((id) => memberRoles.includes(id))
+    : requiredRoleIds.some((id) => memberRoles.cache.has(id));
 
   if (!hasRole) {
-    const role = interaction.guild.roles.cache.get(requiredRoleId);
+    const rolesMention = requiredRoleIds
+      .map((id) => `<@&${id}>`)
+      .join(", ");
     await reply(
       interaction,
       new EmbedBuilder()
         .setColor(COLOR_DANGER)
         .setTitle("🚫 Accès refusé")
         .setDescription(
-          `Tu dois avoir le rôle ${role ? `<@&${requiredRoleId}>` : `\`${requiredRoleId}\``} pour utiliser les commandes du bot.`,
+          `Tu dois avoir l'un de ces rôles pour utiliser les commandes du bot :\n${rolesMention}`,
         ),
       true,
     );
@@ -2008,17 +2047,18 @@ async function handleTicket(
   const sub = interaction.options.getSubcommand();
 
   if (sub === "setup") {
-    const role = interaction.options.getRole("role");
     const category = interaction.options.getChannel("category");
     const log = interaction.options.getChannel("log");
 
     await saveTicketConfig(guild.id, {
-      supportRoleId: role?.id ?? undefined,
       categoryId: category?.id ?? undefined,
       logChannelId: log?.id ?? undefined,
     });
 
     const config = await getTicketConfig(guild.id);
+    const supportMention = config.supportRoleIds.length > 0
+      ? config.supportRoleIds.map((id) => `<@&${id}>`).join(", ")
+      : "Aucun";
     await reply(
       interaction,
       new EmbedBuilder()
@@ -2026,10 +2066,8 @@ async function handleTicket(
         .setTitle("✅ Tickets configurés")
         .addFields(
           {
-            name: "Rôle support",
-            value: config.supportRoleId
-              ? `<@&${config.supportRoleId}>`
-              : "Aucun",
+            name: "Rôles support",
+            value: supportMention,
             inline: true,
           },
           {
@@ -2039,14 +2077,12 @@ async function handleTicket(
           },
           {
             name: "Salon de log",
-            value: config.logChannelId
-              ? `<#${config.logChannelId}>`
-              : "Aucun",
+            value: config.logChannelId ? `<#${config.logChannelId}>` : "Aucun",
             inline: true,
           },
         )
         .setFooter({
-          text: 'Utilise "/ticket panel" pour poster le bouton d\'ouverture.',
+          text: 'Utilise "/ticket addsupportrole" pour ajouter des rôles support.',
         }),
       true,
     );
@@ -2156,6 +2192,54 @@ async function handleTicket(
     return;
   }
 
+  if (sub === "addsupportrole") {
+    const role = interaction.options.getRole("role", true);
+    const added = await addTicketSupportRole(guild.id, role.id);
+    const config = await getTicketConfig(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(added ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(added ? "✅ Rôle support ajouté" : "⚠️ Déjà dans la liste")
+        .setDescription(
+          added
+            ? `<@&${role.id}> peut maintenant voir et gérer les tickets.`
+            : `<@&${role.id}> est déjà un rôle support.`,
+        )
+        .addFields({
+          name: "Rôles support actifs",
+          value: config.supportRoleIds.map((id) => `<@&${id}>`).join(", ") || "Aucun",
+        }),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "removesupportrole") {
+    const role = interaction.options.getRole("role", true);
+    const removed = await removeTicketSupportRole(guild.id, role.id);
+    const config = await getTicketConfig(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(removed ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(removed ? "✅ Rôle support retiré" : "⚠️ Rôle introuvable")
+        .setDescription(
+          removed
+            ? `<@&${role.id}> n'a plus accès aux tickets.`
+            : `<@&${role.id}> n'était pas dans la liste.`,
+        )
+        .addFields({
+          name: "Rôles support restants",
+          value: config.supportRoleIds.length > 0
+            ? config.supportRoleIds.map((id) => `<@&${id}>`).join(", ")
+            : "Aucun",
+        }),
+      true,
+    );
+    return;
+  }
+
   if (sub === "config") {
     const config = await getTicketConfig(guild.id);
     const open = Object.keys(config.openTickets).length;
@@ -2166,9 +2250,9 @@ async function handleTicket(
         .setTitle("🎫 Configuration des tickets")
         .addFields(
           {
-            name: "Rôle support",
-            value: config.supportRoleId
-              ? `<@&${config.supportRoleId}>`
+            name: `Rôles support (${config.supportRoleIds.length})`,
+            value: config.supportRoleIds.length > 0
+              ? config.supportRoleIds.map((id) => `<@&${id}>`).join(", ")
               : "Non configuré",
             inline: true,
           },
@@ -2484,7 +2568,7 @@ async function handleBotRole(
   const guild = interaction.guild!;
   const sub = interaction.options.getSubcommand();
 
-  if (sub === "set") {
+  if (sub === "add") {
     const role = interaction.options.getRole("role", true);
     if (role.managed) {
       await reply(
@@ -2499,30 +2583,62 @@ async function handleBotRole(
       );
       return;
     }
-    await setBotRole(guild.id, role.id);
+    const added = await addBotRole(guild.id, role.id);
+    const current = await getBotRoles(guild.id);
     await reply(
       interaction,
       new EmbedBuilder()
-        .setColor(COLOR_SUCCESS)
-        .setTitle("✅ Rôle requis configuré")
+        .setColor(added ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(added ? "✅ Rôle ajouté" : "⚠️ Déjà dans la liste")
         .setDescription(
-          `Seuls les membres avec ${role} (et les administrateurs) pourront désormais utiliser les commandes du bot.\n\n` +
-            `Les commandes \`/botrole\` et \`/help\` restent accessibles à tous.`,
-        ),
+          added
+            ? `<@&${role.id}> peut maintenant utiliser les commandes du bot.`
+            : `<@&${role.id}> est déjà autorisé.`,
+        )
+        .addFields({
+          name: "Rôles autorisés",
+          value: current.map((id) => `<@&${id}>`).join(", ") || "Aucun",
+        })
+        .setFooter({ text: "Les admins et le propriétaire sont toujours exemptés." }),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "remove") {
+    const role = interaction.options.getRole("role", true);
+    const removed = await removeBotRole(guild.id, role.id);
+    const current = await getBotRoles(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(removed ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(removed ? "✅ Rôle retiré" : "⚠️ Rôle introuvable")
+        .setDescription(
+          removed
+            ? `<@&${role.id}> n'a plus accès aux commandes du bot.`
+            : `<@&${role.id}> n'était pas dans la liste.`,
+        )
+        .addFields({
+          name: "Rôles restants",
+          value: current.length > 0
+            ? current.map((id) => `<@&${id}>`).join(", ")
+            : "Aucun — tout le monde peut utiliser le bot.",
+        }),
       true,
     );
     return;
   }
 
   if (sub === "clear") {
-    const removed = await clearBotRole(guild.id);
+    const cleared = await clearBotRoles(guild.id);
     await reply(
       interaction,
       new EmbedBuilder()
-        .setColor(removed ? COLOR_SUCCESS : COLOR_WARN)
-        .setTitle(removed ? "✅ Restriction supprimée" : "ℹ️ Aucune restriction")
+        .setColor(cleared ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(cleared ? "✅ Restrictions supprimées" : "ℹ️ Aucune restriction")
         .setDescription(
-          removed
+          cleared
             ? "Tout le monde peut à nouveau utiliser les commandes du bot."
             : "Aucun rôle requis n'était configuré.",
         ),
@@ -2531,18 +2647,21 @@ async function handleBotRole(
     return;
   }
 
-  if (sub === "show") {
-    const roleId = await getBotRole(guild.id);
+  if (sub === "list") {
+    const roleIds = await getBotRoles(guild.id);
     await reply(
       interaction,
       new EmbedBuilder()
         .setColor(COLOR_PRIMARY)
-        .setTitle("🔑 Rôle requis pour le bot")
+        .setTitle("🔑 Rôles autorisés pour le bot")
         .setDescription(
-          roleId
-            ? `Le rôle <@&${roleId}> est requis pour utiliser les commandes du bot.\nLes administrateurs et le propriétaire du serveur sont exemptés.`
-            : "Aucun rôle requis — tout le monde peut utiliser le bot.",
-        ),
+          roleIds.length > 0
+            ? roleIds.map((id) => `• <@&${id}>`).join("\n")
+            : "Aucun rôle configuré — tout le monde peut utiliser le bot.",
+        )
+        .setFooter({
+          text: `${roleIds.length} rôle(s) · Les admins et le propriétaire sont toujours exemptés.`,
+        }),
       true,
     );
     return;
@@ -3079,8 +3198,8 @@ async function handleHelp(
         name: "⚙️ Configuration",
         value:
           "`/resetroles @user confirm:True` → Retirer tous les rôles sauf ceux du bot\n" +
-          "`/ticket setup|panel|close|add|remove|config` → Système de tickets\n" +
-          "`/botrole set|clear|show` → Rôle requis pour utiliser le bot\n" +
+          "`/ticket setup|panel|addsupportrole|removesupportrole|config` → Système de tickets\n" +
+          "`/botrole add|remove|clear|list` → Rôles autorisés pour le bot\n" +
           "`/setavatar` → Changer la photo de profil du bot\n" +
           "`/levels enable|disable|status` → Activer/désactiver le système d'XP\n" +
           "`/automod enable|disable|status` → Activer/désactiver l'automod\n" +

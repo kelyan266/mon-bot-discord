@@ -20,12 +20,14 @@ const DATA_DIR = path.join(__dirname, "..", "data");
 const FILE = path.join(DATA_DIR, "tickets.json");
 
 export interface TicketGuildConfig {
-  supportRoleId?: string;
+  supportRoleIds: string[];
   categoryId?: string;
   logChannelId?: string;
   welcomeMessage?: string;
   ticketCount: number;
   openTickets: Record<string, string>;
+  /** @deprecated migrated to supportRoleIds */
+  supportRoleId?: string;
 }
 
 interface TicketsDb {
@@ -62,7 +64,16 @@ async function persist(): Promise<void> {
 }
 
 function getGuild(db: TicketsDb, guildId: string): TicketGuildConfig {
-  return (db.guilds[guildId] ??= { ticketCount: 0, openTickets: {} });
+  const g = (db.guilds[guildId] ??= {
+    supportRoleIds: [],
+    ticketCount: 0,
+    openTickets: {},
+  });
+  if (!g.supportRoleIds) {
+    g.supportRoleIds = g.supportRoleId ? [g.supportRoleId] : [];
+    delete g.supportRoleId;
+  }
+  return g;
 }
 
 export async function getTicketConfig(
@@ -74,18 +85,39 @@ export async function getTicketConfig(
 
 export async function saveTicketConfig(
   guildId: string,
-  patch: Partial<Omit<TicketGuildConfig, "ticketCount" | "openTickets">>,
+  patch: Partial<Pick<TicketGuildConfig, "categoryId" | "logChannelId" | "welcomeMessage">>,
 ): Promise<void> {
   const db = await ensureLoaded();
   const guild = getGuild(db, guildId);
-  if (patch.supportRoleId !== undefined)
-    guild.supportRoleId = patch.supportRoleId;
   if (patch.categoryId !== undefined) guild.categoryId = patch.categoryId;
-  if (patch.logChannelId !== undefined)
-    guild.logChannelId = patch.logChannelId;
-  if (patch.welcomeMessage !== undefined)
-    guild.welcomeMessage = patch.welcomeMessage;
+  if (patch.logChannelId !== undefined) guild.logChannelId = patch.logChannelId;
+  if (patch.welcomeMessage !== undefined) guild.welcomeMessage = patch.welcomeMessage;
   await persist();
+}
+
+export async function addTicketSupportRole(
+  guildId: string,
+  roleId: string,
+): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  if (guild.supportRoleIds.includes(roleId)) return false;
+  guild.supportRoleIds.push(roleId);
+  await persist();
+  return true;
+}
+
+export async function removeTicketSupportRole(
+  guildId: string,
+  roleId: string,
+): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  const before = guild.supportRoleIds.length;
+  guild.supportRoleIds = guild.supportRoleIds.filter((id) => id !== roleId);
+  if (guild.supportRoleIds.length === before) return false;
+  await persist();
+  return true;
 }
 
 export async function getOpenTicket(
@@ -215,9 +247,9 @@ export async function handleTicketOpen(
     },
   ];
 
-  if (config.supportRoleId) {
+  for (const roleId of config.supportRoleIds) {
     permissionOverwrites.push({
-      id: config.supportRoleId,
+      id: roleId,
       type: OverwriteType.Role,
       allow: [
         PermissionFlagsBits.ViewChannel,
@@ -263,7 +295,7 @@ export async function handleTicketOpen(
     .setFooter({ text: `Ouvert par ${member.user.tag}` })
     .setTimestamp();
 
-  const ping = config.supportRoleId ? `<@&${config.supportRoleId}>` : "";
+  const ping = config.supportRoleIds.map((id) => `<@&${id}>`).join(" ");
 
   await (channel as TextChannel).send({
     content: ping || undefined,

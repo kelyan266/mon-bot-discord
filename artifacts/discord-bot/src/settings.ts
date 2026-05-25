@@ -9,8 +9,10 @@ const FILE = path.join(DATA_DIR, "settings.json");
 interface GuildSettings {
   automodEnabled: boolean;
   xpEnabled: boolean;
-  botRoleId?: string;
+  botRoleIds: string[];
   keepRoleIds?: string[];
+  /** @deprecated migrated to botRoleIds */
+  botRoleId?: string;
 }
 
 interface SettingsDb {
@@ -20,6 +22,7 @@ interface SettingsDb {
 const DEFAULT_SETTINGS: GuildSettings = {
   automodEnabled: true,
   xpEnabled: true,
+  botRoleIds: [],
 };
 
 let cache: SettingsDb | null = null;
@@ -52,7 +55,12 @@ async function persist(): Promise<void> {
 }
 
 function getGuild(db: SettingsDb, guildId: string): GuildSettings {
-  return (db.guilds[guildId] ??= { ...DEFAULT_SETTINGS });
+  const g = (db.guilds[guildId] ??= { ...DEFAULT_SETTINGS });
+  if (!g.botRoleIds) {
+    g.botRoleIds = g.botRoleId ? [g.botRoleId] : [];
+    delete g.botRoleId;
+  }
+  return g;
 }
 
 export async function isAutomodEnabled(guildId: string): Promise<boolean> {
@@ -83,25 +91,41 @@ export async function setXpEnabled(
   await persist();
 }
 
-export async function getBotRole(guildId: string): Promise<string | null> {
+export async function getBotRoles(guildId: string): Promise<string[]> {
   const db = await ensureLoaded();
-  return getGuild(db, guildId).botRoleId ?? null;
+  return [...getGuild(db, guildId).botRoleIds];
 }
 
-export async function setBotRole(
+export async function addBotRole(
   guildId: string,
   roleId: string,
-): Promise<void> {
-  const db = await ensureLoaded();
-  getGuild(db, guildId).botRoleId = roleId;
-  await persist();
-}
-
-export async function clearBotRole(guildId: string): Promise<boolean> {
+): Promise<boolean> {
   const db = await ensureLoaded();
   const guild = getGuild(db, guildId);
-  if (!guild.botRoleId) return false;
-  delete guild.botRoleId;
+  if (guild.botRoleIds.includes(roleId)) return false;
+  guild.botRoleIds.push(roleId);
+  await persist();
+  return true;
+}
+
+export async function removeBotRole(
+  guildId: string,
+  roleId: string,
+): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  const before = guild.botRoleIds.length;
+  guild.botRoleIds = guild.botRoleIds.filter((id) => id !== roleId);
+  if (guild.botRoleIds.length === before) return false;
+  await persist();
+  return true;
+}
+
+export async function clearBotRoles(guildId: string): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  if (guild.botRoleIds.length === 0) return false;
+  guild.botRoleIds = [];
   await persist();
   return true;
 }
