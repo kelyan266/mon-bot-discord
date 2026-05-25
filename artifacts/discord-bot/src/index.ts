@@ -123,6 +123,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         );
         return;
       }
+      if (interaction.customId.startsWith("bj_")) {
+        const { handleBlackjackButton } = await import("./casino.js");
+        await handleBlackjackButton(interaction);
+        return;
+      }
     } catch (err) {
       console.error("Button interaction error:", err);
     }

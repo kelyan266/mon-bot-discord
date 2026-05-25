@@ -26,6 +26,13 @@ import {
 import { getUserStats } from "./antiSpam.js";
 import { getSnipe } from "./snipes.js";
 import {
+  handleBalance,
+  handleBlackjack,
+  handleDaily,
+  handleRoulette,
+  handleSlots,
+} from "./casino.js";
+import {
   getChannelStats,
   getChannelStatsSummary,
 } from "./channelStats.js";
@@ -425,6 +432,89 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       name: "leaderboard",
       description: "Show the top 10 members by XP",
       dm_permission: false,
+    },
+    {
+      name: "balance",
+      description: "Voir le solde de pièces d'un membre",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "utilisateur",
+          description: "Membre dont tu veux voir le solde (toi par défaut)",
+          required: false,
+        },
+      ],
+    },
+    {
+      name: "daily",
+      description: "Réclame ta récompense quotidienne de 200 🪙",
+      dm_permission: false,
+    },
+    {
+      name: "slots",
+      description: "🎰 Joue à la machine à sous",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Integer,
+          name: "mise",
+          description: "Nombre de pièces à miser",
+          required: true,
+          min_value: 10,
+        },
+      ],
+    },
+    {
+      name: "blackjack",
+      description: "♠ Joue au blackjack contre le croupier",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Integer,
+          name: "mise",
+          description: "Nombre de pièces à miser",
+          required: true,
+          min_value: 10,
+        },
+      ],
+    },
+    {
+      name: "roulette",
+      description: "🎡 Joue à la roulette européenne",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Integer,
+          name: "mise",
+          description: "Nombre de pièces à miser",
+          required: true,
+          min_value: 10,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "choix",
+          description: "Ton pari : rouge, noir, pair, impair, 1-12, 13-24, 25-36",
+          required: true,
+          choices: [
+            { name: "Rouge 🔴", value: "rouge" },
+            { name: "Noir ⚫", value: "noir" },
+            { name: "Pair", value: "pair" },
+            { name: "Impair", value: "impair" },
+            { name: "1ère douzaine (1–12) ×3", value: "1-12" },
+            { name: "2e douzaine (13–24) ×3", value: "13-24" },
+            { name: "3e douzaine (25–36) ×3", value: "25-36" },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Integer,
+          name: "nombre",
+          description: "Parie sur un numéro précis 0–36 (×36) — remplace le choix",
+          required: false,
+          min_value: 0,
+          max_value: 36,
+        },
+      ],
     },
     {
       name: "setavatar",
@@ -1105,6 +1195,16 @@ export async function handleInteraction(
       return handleBotRole(interaction);
     case "ticket":
       return handleTicket(interaction);
+    case "balance":
+      return handleBalance(interaction);
+    case "daily":
+      return handleDaily(interaction);
+    case "slots":
+      return handleSlots(interaction);
+    case "blackjack":
+      return handleBlackjack(interaction);
+    case "roulette":
+      return handleRoulette(interaction);
     default:
       await reply(
         interaction,
@@ -3206,6 +3306,15 @@ async function handleHelp(
           "`/autorole set` → Rôle auto à l'arrivée\n" +
           "`/autorole show` → Voir le rôle auto\n" +
           "`/autorole clear` → Désactiver le rôle auto",
+      },
+      {
+        name: "🎰 Casino",
+        value:
+          "`/balance [@user]` → Voir son portefeuille\n" +
+          "`/daily` → Récompense quotidienne (200 🪙)\n" +
+          "`/slots <mise>` → Machine à sous (jackpot × 20)\n" +
+          "`/blackjack <mise>` → Blackjack interactif\n" +
+          "`/roulette <mise> <choix> [nombre]` → Roulette européenne",
       },
       {
         name: "🎨 Autres",
