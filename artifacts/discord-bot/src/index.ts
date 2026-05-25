@@ -108,9 +108,9 @@ function updatePresence(): void {
     status: "online",
     activities: [
       {
-        name: "Louboutin on top",
-        state: `Modère ${count} serveur${count !== 1 ? "s" : ""}`,
-        type: ActivityType.Custom,
+        name: `🎤 un vocal • ${count} serveur${count !== 1 ? "s" : ""}`,
+        type: ActivityType.Streaming,
+        url: "https://www.twitch.tv/louboutin",
       },
     ],
   });
