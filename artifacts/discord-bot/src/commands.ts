@@ -394,6 +394,34 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "mention",
+      description: "Mentionner un membre ou un rôle avec le bot",
+      default_member_permissions: PermissionFlagsBits.ManageMessages.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Mentionable,
+          name: "cible",
+          description: "Membre ou rôle à mentionner",
+          required: true,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "message",
+          description: "Message optionnel après la mention",
+          required: false,
+          max_length: 1900,
+        },
+        {
+          type: ApplicationCommandOptionType.Channel,
+          name: "salon",
+          description: "Salon cible (défaut : salon actuel)",
+          required: false,
+          channel_types: [ChannelType.GuildText],
+        },
+      ],
+    },
+    {
       name: "say",
       description: "Faire parler le bot dans un salon",
       default_member_permissions: PermissionFlagsBits.ManageMessages.toString(),
@@ -2238,6 +2266,8 @@ export async function handleInteraction(
       return handleEvent(interaction);
     case "protection":
       return handleProtection(interaction);
+    case "mention":
+      return handleMention(interaction);
     case "say":
       return handleSay(interaction);
     case "announce":
@@ -4370,6 +4400,38 @@ async function handleChannelStats(
       .setTimestamp(),
     true,
   );
+}
+
+async function handleMention(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const cible = interaction.options.getMentionable("cible", true);
+  const message = interaction.options.getString("message") ?? "";
+  const channelOption = interaction.options.getChannel("salon");
+  const target = (channelOption ?? interaction.channel) as TextChannel;
+
+  if (!target?.isTextBased()) {
+    await interaction.reply({ content: "❌ Salon introuvable.", ephemeral: true });
+    return;
+  }
+
+  const mention =
+    "toString" in cible ? cible.toString() : `<@${(cible as { id: string }).id}>`;
+
+  const content = message ? `${mention} ${message}` : mention;
+
+  try {
+    await (target as TextChannel).send({
+      content,
+      allowedMentions: { parse: ["users", "roles"] },
+    });
+    await interaction.reply({
+      embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setDescription(`✅ Mention envoyée dans <#${target.id}>.`)],
+      ephemeral: true,
+    });
+  } catch {
+    await interaction.reply({ content: "❌ Je n'ai pas la permission d'envoyer des messages dans ce salon.", ephemeral: true });
+  }
 }
 
 async function handleSay(
