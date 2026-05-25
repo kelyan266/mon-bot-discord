@@ -503,6 +503,31 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "show",
+      description: "Afficher les commandes d'une catégorie (visible par tous)",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "categorie",
+          description: "Catégorie à afficher",
+          required: true,
+          choices: [
+            { name: "🛡️ Modération", value: "moderation" },
+            { name: "🔒 Salons", value: "salons" },
+            { name: "🔍 Utilitaires", value: "utilitaires" },
+            { name: "📊 Sondages & Citations", value: "sondages" },
+            { name: "📈 Niveaux & XP", value: "niveaux" },
+            { name: "🎰 Casino", value: "casino" },
+            { name: "🎟️ Tickets", value: "tickets" },
+            { name: "📅 Événements", value: "evenements" },
+            { name: "🎵 Activité & Présence", value: "activite" },
+            { name: "📣 Annonces & Messages", value: "annonces" },
+          ],
+        },
+      ],
+    },
+    {
       name: "embed",
       description: "Post a styled announcement embed in this channel",
       default_member_permissions:
@@ -2250,6 +2275,8 @@ export async function handleInteraction(
       return handleHelp(interaction);
     case "commands":
       return handleCommands(interaction);
+    case "show":
+      return handleShow(interaction);
     case "aiwelcome":
       return handleAiWelcome(interaction);
     case "logs":
@@ -5367,6 +5394,149 @@ async function handleCommands(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   await reply(interaction, buildHelpEmbed(), false);
+}
+
+const CATEGORY_EMBEDS: Record<string, () => EmbedBuilder> = {
+  moderation: () =>
+    new EmbedBuilder()
+      .setColor(0xed4245)
+      .setTitle("🛡️ Modération")
+      .addFields(
+        { name: "/warn <user> <raison>", value: "Ajouter un avertissement", inline: false },
+        { name: "/warnings [@user]", value: "Voir les avertissements d'un membre", inline: false },
+        { name: "/clearwarnings <user>", value: "Supprimer tous les avertissements", inline: false },
+        { name: "/delwarning <user> <id>", value: "Supprimer un avertissement précis", inline: false },
+        { name: "/kick <user> [raison]", value: "Expulser un membre", inline: false },
+        { name: "/ban <user> [raison]", value: "Bannir un membre", inline: false },
+        { name: "/unban <user-id>", value: "Débannir un membre", inline: false },
+        { name: "/timeout <user> <durée>", value: "Mettre en sourdine temporairement", inline: false },
+        { name: "/untimeout <user>", value: "Retirer la sourdine", inline: false },
+        { name: "/purge <n>", value: "Supprimer les N derniers messages du salon", inline: false },
+      ),
+
+  salons: () =>
+    new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("🔒 Salons")
+      .addFields(
+        { name: "/lock [raison]", value: "Verrouiller le salon (personne ne peut écrire)", inline: false },
+        { name: "/unlock", value: "Déverrouiller le salon", inline: false },
+        { name: "/slowmode <secondes>", value: "Définir le délai entre les messages (0 = désactiver)", inline: false },
+      ),
+
+  utilitaires: () =>
+    new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("🔍 Utilitaires")
+      .addFields(
+        { name: "/avatar [@user]", value: "Afficher l'avatar HD + bannière d'un membre", inline: false },
+        { name: "/serverinfo", value: "Carte détaillée du serveur (membres, canaux, boosts…)", inline: false },
+        { name: "/userinfo [@user]", value: "Profil complet : badges, rôles, permissions", inline: false },
+        { name: "/roleinfo <rôle>", value: "Infos d'un rôle : membres, perms, couleur", inline: false },
+        { name: "/stats", value: "Dashboard global du serveur", inline: false },
+        { name: "/membercount", value: "Compteur de membres en temps réel", inline: false },
+        { name: "/channelstats", value: "Top des salons les plus actifs", inline: false },
+        { name: "/userstats [@user]", value: "Stats anti-spam d'un membre", inline: false },
+        { name: "/snipe", value: "Afficher le dernier message supprimé du salon", inline: false },
+        { name: "/ping", value: "Latence du bot et de l'API Discord", inline: false },
+      ),
+
+  sondages: () =>
+    new EmbedBuilder()
+      .setColor(0xfee75c)
+      .setTitle("📊 Sondages & Citations")
+      .addFields(
+        { name: "/poll create <question> <opt1> <opt2> [opt3-5]", value: "Créer un sondage avec votes en temps réel", inline: false },
+        { name: "/poll end <id>", value: "Fermer un sondage et afficher les résultats", inline: false },
+        { name: "/quote random", value: "Citation aléatoire du serveur", inline: false },
+        { name: "/quote add <texte> [auteur]", value: "Ajouter une citation", inline: false },
+        { name: "/quote list", value: "Voir toutes les citations", inline: false },
+        { name: "/quote delete <id>", value: "Supprimer une citation", inline: false },
+      ),
+
+  niveaux: () =>
+    new EmbedBuilder()
+      .setColor(0x57f287)
+      .setTitle("📈 Niveaux & XP")
+      .setDescription("15-25 XP par message (cooldown 60s) • 10 XP/min en vocal (≥2 humains)\nFormule : `5L² + 50L + 100` XP pour passer au niveau L+1")
+      .addFields(
+        { name: "/level [@user]", value: "Voir son niveau, XP et barre de progression", inline: false },
+        { name: "/leaderboard", value: "Classement XP / Messages / Vocal avec pagination", inline: false },
+        { name: "/levelrole set <niveau> <rôle>", value: "Attribuer un rôle à un niveau donné", inline: false },
+        { name: "/levelrole remove <niveau>", value: "Retirer la récompense d'un niveau", inline: false },
+        { name: "/levelrole list", value: "Voir toutes les récompenses configurées", inline: false },
+      ),
+
+  casino: () =>
+    new EmbedBuilder()
+      .setColor(0xfee75c)
+      .setTitle("🎰 Casino")
+      .addFields(
+        { name: "/balance [@user]", value: "Voir son portefeuille de pièces", inline: false },
+        { name: "/daily", value: "Récompense quotidienne (+ bonus streak consécutif)", inline: false },
+        { name: "/slots <mise>", value: "Machine à sous — 3 symboles pour gagner", inline: false },
+        { name: "/blackjack <mise>", value: "Blackjack interactif : tirer / rester / doubler", inline: false },
+        { name: "/roulette <mise> <choix>", value: "Roulette européenne (rouge/noir/pair/impair/numéro)", inline: false },
+        { name: "/economy top", value: "Classement des membres les plus riches", inline: false },
+      ),
+
+  tickets: () =>
+    new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("🎟️ Tickets")
+      .addFields(
+        { name: "/ticket close", value: "Fermer le ticket actuel (et l'archiver)", inline: false },
+        { name: "/ticket add <user>", value: "Ajouter un membre au ticket", inline: false },
+        { name: "/ticket remove <user>", value: "Retirer un membre du ticket", inline: false },
+      ),
+
+  evenements: () =>
+    new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("📅 Événements")
+      .addFields(
+        { name: "/event create <titre> <description> <date> <heure>", value: "Créer un événement (date : JJ/MM/AAAA, heure : HH:MM)\nOptions : places max, rappel en minutes avant le début", inline: false },
+        { name: "/event join <id>", value: "S'inscrire à un événement", inline: false },
+        { name: "/event leave <id>", value: "Se désinscrire d'un événement", inline: false },
+        { name: "/event list", value: "Voir tous les événements à venir du serveur", inline: false },
+        { name: "/event info <id>", value: "Détails complets + liste des inscrits", inline: false },
+        { name: "/event cancel <id>", value: "Annuler un événement (créateur ou admin)", inline: false },
+      ),
+
+  activite: () =>
+    new EmbedBuilder()
+      .setColor(0x1db954)
+      .setTitle("🎵 Activité & Présence")
+      .addFields(
+        { name: "/activity [@membre]", value: "Activité en cours : Spotify (cover + barre live) ou jeu (session, détails rich presence)", inline: false },
+        { name: "/whoisplaying <jeu>", value: "Liste des membres qui jouent à un jeu (recherche partielle)", inline: false },
+        { name: "/listening", value: "Liste des membres qui écoutent Spotify en ce moment", inline: false },
+        { name: "/sessions", value: "Vue d'ensemble : statuts, jeux actifs, Spotify, streams", inline: false },
+      ),
+
+  annonces: () =>
+    new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("📣 Annonces & Messages")
+      .addFields(
+        { name: "/say <message> [salon]", value: "Faire parler le bot dans un salon (sans mentions)", inline: false },
+        { name: "/mention <cible> [message] [salon]", value: "Mentionner un membre ou un rôle avec le bot", inline: false },
+        { name: "/announce <message> [salon] [embed]", value: "Envoyer une annonce @everyone (option embed stylé)", inline: false },
+        { name: "/embed <message> [titre] [couleur]", value: "Annonce en embed personnalisé dans le salon", inline: false },
+        { name: "/dm <user> <message>", value: "Envoyer un message privé via le bot", inline: false },
+      ),
+};
+
+async function handleShow(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const cat = interaction.options.getString("categorie", true);
+  const builder = CATEGORY_EMBEDS[cat];
+  if (!builder) {
+    await interaction.reply({ content: "❌ Catégorie inconnue.", ephemeral: true });
+    return;
+  }
+  await interaction.reply({ embeds: [builder().setTimestamp()] });
 }
 
 async function handleAiWelcome(
