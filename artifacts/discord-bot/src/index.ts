@@ -31,6 +31,11 @@ import {
   handleMemberJoinRaid,
   handleWebhookUpdate,
 } from "./antinuke.js";
+import {
+  handleMessageDelete as logMessageDelete,
+  handleMessageEdit as logMessageEdit,
+  handleVoiceLog,
+} from "./logging.js";
 import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
 import { getRolesUpToLevel } from "./levelRoles.js";
@@ -418,6 +423,15 @@ client.on(Events.MessageDelete, (message) => {
   } catch (err) {
     console.error("Snipe handler failed:", err);
   }
+  void logMessageDelete(message, client).catch((err) =>
+    console.error("Log message delete failed:", err),
+  );
+});
+
+client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
+  void logMessageEdit(oldMessage, newMessage, client).catch((err) =>
+    console.error("Log message edit failed:", err),
+  );
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
@@ -508,7 +522,9 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   } else {
     voiceSessions.delete(userId);
   }
-  void oldState;
+  void handleVoiceLog(oldState, newState, client).catch((err) =>
+    console.error("Log voice failed:", err),
+  );
 });
 
 setInterval(() => {

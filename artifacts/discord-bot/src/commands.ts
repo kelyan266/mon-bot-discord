@@ -73,6 +73,11 @@ import {
   saveProtectionConfig,
 } from "./antinuke.js";
 import {
+  createLogsChannel,
+  getLoggingConfig,
+  saveLoggingConfig,
+} from "./logging.js";
+import {
   buildPollComponents,
   buildPollEmbed,
   castVote,
@@ -1541,6 +1546,50 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "logs",
+      description: "Configurer le système de logs du serveur",
+      default_member_permissions: PermissionFlagsBits.ManageGuild.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "setup",
+          description: "Activer les logs (crée #logs automatiquement si besoin)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Channel,
+              name: "salon",
+              description: "Salon de logs existant (laisser vide = création automatique)",
+              required: false,
+              channel_types: [ChannelType.GuildText],
+            },
+            {
+              type: ApplicationCommandOptionType.Boolean,
+              name: "messages",
+              description: "Logger les suppressions et modifications de messages (défaut: oui)",
+              required: false,
+            },
+            {
+              type: ApplicationCommandOptionType.Boolean,
+              name: "vocal",
+              description: "Logger les activités vocales (défaut: oui)",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "status",
+          description: "Voir la configuration actuelle des logs",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "disable",
+          description: "Désactiver les logs",
+        },
+      ],
+    },
+    {
       name: "event",
       description: "Créer et gérer des événements sur le serveur",
       dm_permission: false,
@@ -2081,6 +2130,8 @@ export async function handleInteraction(
       return handleCommands(interaction);
     case "aiwelcome":
       return handleAiWelcome(interaction);
+    case "logs":
+      return handleLogs(interaction);
     case "event":
       return handleEvent(interaction);
     case "protection":
@@ -4278,6 +4329,106 @@ async function handleDm(
       .setTimestamp(),
     true,
   );
+}
+
+async function handleLogs(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guildId!;
+  const guild = interaction.guild!;
+
+  if (sub === "setup") {
+    await interaction.deferReply({ ephemeral: true });
+
+    const salonOption = interaction.options.getChannel("salon");
+    const logMessages = interaction.options.getBoolean("messages") ?? true;
+    const logVoice = interaction.options.getBoolean("vocal") ?? true;
+
+    let channelId: string;
+
+    if (salonOption) {
+      channelId = salonOption.id;
+    } else {
+      const created = await createLogsChannel(guild);
+      if (!created) {
+        await interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(COLOR_DANGER)
+              .setTitle("❌ Erreur")
+              .setDescription(
+                "Je n'ai pas pu créer le salon #logs. Vérifie que j'ai la permission **Gérer les salons**.",
+              ),
+          ],
+        });
+        return;
+      }
+      channelId = created.id;
+    }
+
+    const cfg = await getLoggingConfig(guildId);
+    cfg.enabled = true;
+    cfg.channelId = channelId;
+    cfg.logMessages = logMessages;
+    cfg.logVoice = logVoice;
+    await saveLoggingConfig(guildId, cfg);
+
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Logs activés")
+          .setDescription(`Les logs seront envoyés dans <#${channelId}>.`)
+          .addFields(
+            { name: "📝 Messages (supp./modif.)", value: logMessages ? "✅ Activé" : "❌ Désactivé", inline: true },
+            { name: "🔊 Activité vocale", value: logVoice ? "✅ Activé" : "❌ Désactivé", inline: true },
+          ),
+      ],
+    });
+    return;
+  }
+
+  if (sub === "status") {
+    const cfg = await getLoggingConfig(guildId);
+    const embed = new EmbedBuilder()
+      .setColor(cfg.enabled ? COLOR_SUCCESS : COLOR_WARN)
+      .setTitle(`📋 Logs — ${cfg.enabled ? "Actifs ✅" : "Inactifs ⚠️"}`)
+      .addFields(
+        {
+          name: "Salon",
+          value: cfg.channelId ? `<#${cfg.channelId}>` : "—",
+          inline: true,
+        },
+        {
+          name: "📝 Messages",
+          value: cfg.logMessages ? "✅" : "❌",
+          inline: true,
+        },
+        {
+          name: "🔊 Vocal",
+          value: cfg.logVoice ? "✅" : "❌",
+          inline: true,
+        },
+      );
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+    return;
+  }
+
+  if (sub === "disable") {
+    const cfg = await getLoggingConfig(guildId);
+    cfg.enabled = false;
+    await saveLoggingConfig(guildId, cfg);
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setTitle("⚠️ Logs désactivés")
+          .setDescription("Plus aucun log ne sera envoyé. Utilise `/logs setup` pour les réactiver."),
+      ],
+      ephemeral: true,
+    });
+  }
 }
 
 async function handleEvent(
