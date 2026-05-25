@@ -3882,101 +3882,115 @@ async function handleHelp(
 ): Promise<void> {
   const embed = new EmbedBuilder()
     .setColor(COLOR_PRIMARY)
-    .setTitle("📜 Commandes du bot")
-    .setDescription("Voici la liste des commandes disponibles :")
+    .setTitle("📜 Commandes disponibles")
+    .setDescription(
+      "Les commandes marquées *(admin)* nécessitent **Gérer le serveur** ou **Administrateur**.\n" +
+      "Les accès par catégorie se gèrent avec `/permissions`.",
+    )
     .addFields(
       {
         name: "🛡️ Modération",
         value:
-          "`/warn` → Avertir un membre\n" +
-          "`/warnings` → Voir les avertissements d'un membre\n" +
-          "`/clearwarnings` → Effacer tous les avertissements\n" +
-          "`/delwarning` → Supprimer un avertissement par ID\n" +
-          "`/kick` → Expulser un membre\n" +
-          "`/ban` → Bannir un membre\n" +
-          "`/unban` → Débannir un utilisateur\n" +
-          "`/timeout` → Mute temporaire\n" +
-          "`/untimeout` → Retirer un mute\n" +
-          "`/purge` → Supprimer plusieurs messages",
+          "`/warn` · `/warnings` · `/clearwarnings` · `/delwarning` → Avertissements\n" +
+          "`/kick` · `/ban` · `/unban` → Expulsion & bannissement\n" +
+          "`/timeout` · `/untimeout` → Mute temporaire\n" +
+          "`/purge <n>` → Supprimer des messages en masse",
+        inline: false,
       },
       {
         name: "🔒 Salons",
         value:
-          "`/lock` → Verrouiller le salon\n" +
-          "`/unlock` → Déverrouiller le salon\n" +
-          "`/slowmode` → Définir le slowmode",
+          "`/lock` · `/unlock` → Verrouiller / déverrouiller le salon\n" +
+          "`/slowmode <secondes>` → Définir le délai entre messages",
+        inline: false,
       },
       {
         name: "🔍 Utilitaires",
         value:
-          "`/avatar [@user]` → Avatar HD + bannière + boutons téléchargement\n" +
+          "`/avatar [@user]` → Avatar HD + bannière\n" +
           "`/serverinfo` → Carte détaillée du serveur\n" +
-          "`/userinfo [@user]` → Profil détaillé (badges, rôles, activités, perms)\n" +
-          "`/snipe` → Voir le dernier message supprimé\n" +
-          "`/userstats` → Stats anti-spam d'un membre\n" +
-          "`/channelstats` → Top salons les plus actifs\n" +
-          "`/ping` → Vérifier la latence du bot",
-      },
-      {
-        name: "📈 Niveaux",
-        value:
-          "`/level` → Voir ton niveau et ta progression\n" +
-              "`/leaderboard` → Classement XP / Messages / Vocal avec menu et pagination\n" +
-          "`/levelrole set|remove|list` → Récompenses de rôle par niveau\n" +
-          "`/xp give|take|set|reset` → Admin : ajuster l'XP d'un membre",
-      },
-      {
-        name: "⚙️ Configuration",
-        value:
-          "`/resetroles @user confirm:True` → Retirer tous les rôles sauf ceux du bot\n" +
-          "`/ticket setup|panel|addsupportrole|removesupportrole|config` → Système de tickets\n" +
-          "`/botrole add|remove|clear|list` → Rôles autorisés pour le bot\n" +
-          "`/setavatar` → Changer la photo de profil du bot\n" +
-          "`/levels enable|disable|status` → Activer/désactiver le système d'XP\n" +
-          "`/automod enable|disable|status` → Activer/désactiver l'automod\n" +
-          "`/autorole set` → Rôle auto à l'arrivée\n" +
-          "`/autorole show` → Voir le rôle auto\n" +
-          "`/autorole clear` → Désactiver le rôle auto",
-      },
-      {
-        name: "📋 Infos & Stats",
-        value:
-          "`/roleinfo <rôle>` → Infos complètes d'un rôle (membres, perms, couleur)\n" +
+          "`/userinfo [@user]` → Profil complet (badges, rôles, perms)\n" +
+          "`/roleinfo <rôle>` → Infos d'un rôle (membres, perms, couleur)\n" +
           "`/stats` → Dashboard global du serveur\n" +
-          "`/membercount` → Carte des membres en temps réel",
+          "`/membercount` → Compteur de membres en temps réel\n" +
+          "`/channelstats` → Top salons les plus actifs\n" +
+          "`/userstats [@user]` → Stats anti-spam d'un membre\n" +
+          "`/snipe` → Dernier message supprimé\n" +
+          "`/ping` → Latence du bot",
+        inline: false,
       },
       {
         name: "📊 Sondages & Citations",
         value:
-          "`/poll create <question> <opt1> <opt2> ...` → Sondage avec boutons vote live\n" +
-          "`/poll end <id>` → Terminer un sondage\n" +
-          "`/quote random|add|delete|list` → Système de citations du serveur",
+          "`/poll create <question> <opt1> <opt2> [opt3-5]` → Sondage avec votes live\n" +
+          "`/poll end <id>` → Fermer un sondage et afficher les résultats\n" +
+          "`/quote random` · `/quote add` · `/quote list` · `/quote delete` → Citations",
+        inline: false,
+      },
+      {
+        name: "📈 Niveaux & XP",
+        value:
+          "`/level [@user]` → Voir son niveau et sa progression\n" +
+          "`/leaderboard` → Classement XP / Messages / Vocal avec pagination et menu\n" +
+          "`/levelrole set <niveau> <rôle>` · `remove` · `list` → Récompenses de rôle\n" +
+          "`/xp give|take|set|reset <user>` *(admin)* → Ajuster l'XP\n" +
+          "`/levels enable|disable|status` *(admin)* → Activer / désactiver le système",
+        inline: false,
       },
       {
         name: "🎰 Casino",
         value:
           "`/balance [@user]` → Voir son portefeuille\n" +
-          "`/daily` → Récompense quotidienne (200 🪙)\n" +
-          "`/slots <mise>` → Machine à sous (jackpot × 20)\n" +
-          "`/blackjack <mise>` → Blackjack interactif\n" +
-          "`/roulette <mise> <choix> [nombre]` → Roulette européenne",
+          "`/daily` → Récompense quotidienne (+ bonus streak si activé)\n" +
+          "`/slots <mise>` → Machine à sous\n" +
+          "`/blackjack <mise>` → Blackjack interactif (tirer / rester / doubler)\n" +
+          "`/roulette <mise> <choix>` → Roulette européenne\n" +
+          "`/economy top` → Classement des membres les plus riches\n" +
+          "`/economy give|take|set|reset <user>` *(admin)* → Gérer les pièces",
+        inline: false,
       },
       {
-        name: "🎨 Autres",
+        name: "🎟️ Tickets",
         value:
-          "`/embed` → Envoyer une annonce stylée\n" +
-          "`/dm` → Envoyer un MP à un membre",
+          "`/ticket setup` · `/ticket panel` → Créer le système de tickets *(admin)*\n" +
+          "`/ticket addsupportrole` · `/ticket removesupportrole` → Gérer les rôles support *(admin)*\n" +
+          "`/ticket config` → Voir / modifier la configuration *(admin)*\n" +
+          "`/ticket close` · `/ticket add` · `/ticket remove` → Gérer un ticket ouvert",
+        inline: false,
       },
       {
-        name: "🤖 Auto-modération",
+        name: "⚙️ Configuration *(admin)*",
         value:
-          "Anti-spam pondéré + détection IA de toxicité (gpt-5-nano).\n" +
-          "Messages toxiques (>0.8) supprimés automatiquement.\n" +
-          "3 avertissements automatiques → kick.",
+          "`/permissions view` → Voir qui peut utiliser chaque catégorie\n" +
+          "`/permissions add-role|remove-role <cat> <rôle>` → Restreindre par rôle\n" +
+          "`/permissions add-user|remove-user <cat> <membre>` → Accès individuel\n" +
+          "`/permissions reset <cat>` → Remettre en accès libre\n" +
+          "`/casino config view|set|reset` → Config casino (monnaie, mises, daily, BJ…)\n" +
+          "`/autorole set|show|clear` → Rôle attribué à l'arrivée\n" +
+          "`/botrole add|remove|clear|list` → Rôles requis pour utiliser le bot\n" +
+          "`/automod enable|disable|status` → Anti-spam & toxicité IA\n" +
+          "`/setavatar` → Changer l'avatar du bot",
+        inline: false,
+      },
+      {
+        name: "🎨 Annonces & MP",
+        value:
+          "`/embed <message>` → Envoyer une annonce stylée dans le salon\n" +
+          "`/dm <user> <message>` → Envoyer un message privé via le bot",
+        inline: false,
+      },
+      {
+        name: "🤖 Auto-modération (automatique)",
+        value:
+          "• Anti-spam pondéré (débit, doublons, mentions, liens)\n" +
+          "• Détection IA de toxicité via `gpt-5-nano` — score ≥ 0.8 → suppression + warn\n" +
+          "• Score ≥ 0.95 → timeout 10 min en plus\n" +
+          "• 3 avertissements auto → kick automatique",
+        inline: false,
       },
     )
     .setFooter({
-      text: `${commandDefinitions.length} commandes • Utilise / pour les invoquer`,
+      text: `${commandDefinitions.length} commandes • Tape / pour les invoquer`,
     })
     .setTimestamp();
 
