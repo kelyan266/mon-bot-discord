@@ -130,9 +130,8 @@ export async function generateWelcomeMessage(
       ],
     });
 
-    return (
-      completion.choices[0]?.message?.content?.trim() ?? fallback
-    );
+    const text = completion.choices[0]?.message?.content?.trim() ?? "";
+    return text.length > 0 ? text : fallback;
   } catch (err) {
     console.error("AI welcome generation failed:", err);
     return fallback;
