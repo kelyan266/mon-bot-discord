@@ -64,11 +64,13 @@ async function syncCommands(applicationId: string): Promise<void> {
   const guildId = process.env["DISCORD_GUILD_ID"];
   try {
     if (guildId) {
+      // Clear any stale global commands first so only guild commands show
+      await rest.put(Routes.applicationCommands(applicationId), { body: [] });
       await rest.put(Routes.applicationGuildCommands(applicationId, guildId), {
         body: commandDefinitions,
       });
       console.log(
-        `Synced ${commandDefinitions.length} guild commands for ${guildId} (instant).`,
+        `Synced ${commandDefinitions.length} guild commands for ${guildId} (instant). Global commands cleared.`,
       );
     } else {
       await rest.put(Routes.applicationCommands(applicationId), {
