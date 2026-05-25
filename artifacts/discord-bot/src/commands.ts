@@ -31,6 +31,19 @@ import {
 import { getUserStats } from "./antiSpam.js";
 import { getSnipe } from "./snipes.js";
 import {
+  addRole as permAddRole,
+  addUser as permAddUser,
+  getAllPerms,
+  CATEGORIES,
+  CATEGORY_IDS,
+  checkCategoryPermission,
+  getCategoryForCommand,
+  removeRole as permRemoveRole,
+  removeUser as permRemoveUser,
+  resetCategory,
+  type CategoryId,
+} from "./permissions.js";
+import {
   handleBalance,
   handleBlackjack,
   handleCasinoConfig,
@@ -612,6 +625,148 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       name: "membercount",
       description: "👥 Carte des membres du serveur en temps réel",
       dm_permission: false,
+    },
+    {
+      name: "permissions",
+      description: "🔐 Gérer qui peut utiliser chaque catégorie de commandes",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "view",
+          description: "Voir les restrictions actuelles de toutes les catégories",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "add-role",
+          description: "Restreindre une catégorie à un rôle (les autres rôles seront bloqués)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "catégorie",
+              description: "Catégorie de commandes",
+              required: true,
+              choices: [
+                { name: "🔨 Modération", value: "moderation" },
+                { name: "🎰 Casino", value: "casino" },
+                { name: "📈 Niveaux & XP", value: "levels" },
+                { name: "🎟️ Tickets", value: "tickets" },
+                { name: "🛠️ Utilitaires", value: "utilities" },
+                { name: "⚙️ Configuration", value: "config" },
+              ],
+            },
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "rôle",
+              description: "Rôle autorisé à utiliser cette catégorie",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "remove-role",
+          description: "Retirer un rôle de la liste d'accès à une catégorie",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "catégorie",
+              description: "Catégorie de commandes",
+              required: true,
+              choices: [
+                { name: "🔨 Modération", value: "moderation" },
+                { name: "🎰 Casino", value: "casino" },
+                { name: "📈 Niveaux & XP", value: "levels" },
+                { name: "🎟️ Tickets", value: "tickets" },
+                { name: "🛠️ Utilitaires", value: "utilities" },
+                { name: "⚙️ Configuration", value: "config" },
+              ],
+            },
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "rôle",
+              description: "Rôle à retirer",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "add-user",
+          description: "Autoriser un membre spécifique à utiliser une catégorie",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "catégorie",
+              description: "Catégorie de commandes",
+              required: true,
+              choices: [
+                { name: "🔨 Modération", value: "moderation" },
+                { name: "🎰 Casino", value: "casino" },
+                { name: "📈 Niveaux & XP", value: "levels" },
+                { name: "🎟️ Tickets", value: "tickets" },
+                { name: "🛠️ Utilitaires", value: "utilities" },
+                { name: "⚙️ Configuration", value: "config" },
+              ],
+            },
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "membre",
+              description: "Membre à autoriser explicitement",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "remove-user",
+          description: "Retirer l'accès explicite d'un membre à une catégorie",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "catégorie",
+              description: "Catégorie de commandes",
+              required: true,
+              choices: [
+                { name: "🔨 Modération", value: "moderation" },
+                { name: "🎰 Casino", value: "casino" },
+                { name: "📈 Niveaux & XP", value: "levels" },
+                { name: "🎟️ Tickets", value: "tickets" },
+                { name: "🛠️ Utilitaires", value: "utilities" },
+                { name: "⚙️ Configuration", value: "config" },
+              ],
+            },
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "membre",
+              description: "Membre à retirer",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "reset",
+          description: "Supprimer toutes les restrictions d'une catégorie (retour accès libre)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "catégorie",
+              description: "Catégorie à réinitialiser",
+              required: true,
+              choices: [
+                { name: "🔨 Modération", value: "moderation" },
+                { name: "🎰 Casino", value: "casino" },
+                { name: "📈 Niveaux & XP", value: "levels" },
+                { name: "🎟️ Tickets", value: "tickets" },
+                { name: "🛠️ Utilitaires", value: "utilities" },
+                { name: "⚙️ Configuration", value: "config" },
+                { name: "🔄 Toutes les catégories", value: "all" },
+              ],
+            },
+          ],
+        },
+      ],
     },
     {
       name: "casino",
@@ -1455,6 +1610,33 @@ export async function handleInteraction(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   if (!(await checkBotRoleAccess(interaction))) return;
+
+  const member = interaction.member as GuildMember | null;
+  if (member && interaction.guild) {
+    const { allowed, categoryLabel } = await checkCategoryPermission(member, interaction.commandName);
+    if (!allowed) {
+      const cat = getCategoryForCommand(interaction.commandName);
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setTitle("🔐 Accès refusé")
+            .setDescription(
+              `Tu n'as pas la permission d'utiliser les commandes **${categoryLabel ?? interaction.commandName}**.`,
+            )
+            .addFields({
+              name: "Catégorie",
+              value: cat ? `\`${cat}\`` : "—",
+              inline: true,
+            })
+            .setFooter({ text: "Contacte un administrateur pour obtenir l'accès." }),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+  }
+
   switch (interaction.commandName) {
     case "avatar":
       return handleAvatar(interaction);
@@ -1524,6 +1706,8 @@ export async function handleInteraction(
       return handleBotRole(interaction);
     case "ticket":
       return handleTicket(interaction);
+    case "permissions":
+      return handlePermissions(interaction);
     case "casino":
       return handleCasinoConfig(interaction);
     case "economy":
@@ -4385,6 +4569,204 @@ async function handleMemberCount(
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
+}
+
+async function handlePermissions(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const member = interaction.member as GuildMember;
+  const isAdmin =
+    guild.ownerId === member.id ||
+    member.permissions.has(PermissionFlagsBits.Administrator) ||
+    member.permissions.has(PermissionFlagsBits.ManageGuild);
+
+  const sub = interaction.options.getSubcommand();
+
+  // ── VIEW (non-admin allowed) ──────────────────
+  if (sub === "view") {
+    const allPerms = await getAllPerms(guild.id);
+    const fields = CATEGORY_IDS.map((id) => {
+      const cat = CATEGORIES[id];
+      const perms = allPerms[id];
+      const roleLines = perms.roleIds.length > 0
+        ? perms.roleIds.map((r) => `<@&${r}>`).join(" ")
+        : null;
+      const userLines = perms.userIds.length > 0
+        ? perms.userIds.map((u) => `<@${u}>`).join(" ")
+        : null;
+
+      let value: string;
+      if (!roleLines && !userLines) {
+        value = "🌐 *Tout le monde*";
+      } else {
+        const parts: string[] = [];
+        if (roleLines) parts.push(`Rôles : ${roleLines}`);
+        if (userLines) parts.push(`Membres : ${userLines}`);
+        value = parts.join("\n");
+      }
+
+      return { name: cat.label, value, inline: false };
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor(COLOR_PRIMARY)
+      .setTitle(`🔐 Permissions par catégorie — ${guild.name}`)
+      .setDescription(
+        "Si une catégorie a des restrictions, seuls les rôles/membres listés peuvent l'utiliser.\n" +
+        "Les administrateurs ont toujours accès à tout.",
+      )
+      .addFields(...fields)
+      .setFooter({ text: "Gérez les accès avec /permissions add-role / remove-role / reset" })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+    return;
+  }
+
+  // ── All other subcommands require admin ───────
+  if (!isAdmin) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setDescription("❌ Tu dois être **Administrateur** ou avoir **Gérer le serveur** pour modifier les permissions."),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "add-role") {
+    const categoryId = interaction.options.getString("catégorie", true) as CategoryId;
+    const role = interaction.options.getRole("rôle", true);
+    const perms = await permAddRole(guild.id, categoryId, role.id);
+    const cat = CATEGORIES[categoryId];
+
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle(`✅ Rôle ajouté — ${cat.label}`)
+        .setDescription(`<@&${role.id}> peut maintenant utiliser les commandes **${cat.label}**.`)
+        .addFields({
+          name: "Rôles autorisés",
+          value: perms.roleIds.length > 0 ? perms.roleIds.map((r) => `<@&${r}>`).join(" ") : "Aucun",
+        })
+        .setFooter({ text: `Par ${interaction.user.tag}` })
+        .setTimestamp(),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "remove-role") {
+    const categoryId = interaction.options.getString("catégorie", true) as CategoryId;
+    const role = interaction.options.getRole("rôle", true);
+    const perms = await permRemoveRole(guild.id, categoryId, role.id);
+    const cat = CATEGORIES[categoryId];
+    const nowOpen = perms.roleIds.length === 0 && perms.userIds.length === 0;
+
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_WARN)
+        .setTitle(`🗑️ Rôle retiré — ${cat.label}`)
+        .setDescription(
+          nowOpen
+            ? `<@&${role.id}> retiré. La catégorie **${cat.label}** est maintenant **ouverte à tous**.`
+            : `<@&${role.id}> n'a plus accès à **${cat.label}**.`,
+        )
+        .addFields({
+          name: "Rôles autorisés restants",
+          value: perms.roleIds.length > 0 ? perms.roleIds.map((r) => `<@&${r}>`).join(" ") : "Aucun (ouvert à tous)",
+        })
+        .setFooter({ text: `Par ${interaction.user.tag}` })
+        .setTimestamp(),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "add-user") {
+    const categoryId = interaction.options.getString("catégorie", true) as CategoryId;
+    const user = interaction.options.getUser("membre", true);
+    const perms = await permAddUser(guild.id, categoryId, user.id);
+    const cat = CATEGORIES[categoryId];
+
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle(`✅ Membre ajouté — ${cat.label}`)
+        .setDescription(`<@${user.id}> peut maintenant utiliser les commandes **${cat.label}**, même sans le rôle requis.`)
+        .addFields({
+          name: "Membres autorisés",
+          value: perms.userIds.length > 0 ? perms.userIds.map((u) => `<@${u}>`).join(" ") : "Aucun",
+        })
+        .setFooter({ text: `Par ${interaction.user.tag}` })
+        .setTimestamp(),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "remove-user") {
+    const categoryId = interaction.options.getString("catégorie", true) as CategoryId;
+    const user = interaction.options.getUser("membre", true);
+    const perms = await permRemoveUser(guild.id, categoryId, user.id);
+    const cat = CATEGORIES[categoryId];
+    const nowOpen = perms.roleIds.length === 0 && perms.userIds.length === 0;
+
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_WARN)
+        .setTitle(`🗑️ Membre retiré — ${cat.label}`)
+        .setDescription(
+          nowOpen
+            ? `<@${user.id}> retiré. La catégorie **${cat.label}** est maintenant **ouverte à tous**.`
+            : `<@${user.id}> n'a plus d'accès explicite à **${cat.label}**.`,
+        )
+        .setFooter({ text: `Par ${interaction.user.tag}` })
+        .setTimestamp(),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "reset") {
+    const rawCategory = interaction.options.getString("catégorie", true);
+
+    if (rawCategory === "all") {
+      for (const id of CATEGORY_IDS) {
+        await resetCategory(guild.id, id);
+      }
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("♻️ Toutes les permissions réinitialisées")
+          .setDescription("Toutes les catégories sont maintenant **ouvertes à tous** (restrictions supprimées).")
+          .setFooter({ text: `Par ${interaction.user.tag}` })
+          .setTimestamp(),
+        true,
+      );
+    } else {
+      const categoryId = rawCategory as CategoryId;
+      await resetCategory(guild.id, categoryId);
+      const cat = CATEGORIES[categoryId];
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle(`♻️ Réinitialisé — ${cat.label}`)
+          .setDescription(`La catégorie **${cat.label}** est maintenant **ouverte à tous** (toutes les restrictions supprimées).`)
+          .setFooter({ text: `Par ${interaction.user.tag}` })
+          .setTimestamp(),
+        true,
+      );
+    }
+  }
 }
 
 async function handleSlowmode(
