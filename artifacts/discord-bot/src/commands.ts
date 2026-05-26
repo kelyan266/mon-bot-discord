@@ -5237,306 +5237,344 @@ async function handleProtection(
   }
 }
 
-function buildHelpEmbed(): EmbedBuilder {
-  return new EmbedBuilder()
-    .setColor(COLOR_PRIMARY)
-    .setTitle("📜 Commandes disponibles")
-    .setDescription(
-      "Les commandes marquées *(admin)* nécessitent **Gérer le serveur** ou **Administrateur**.\n" +
-      "Les accès par catégorie se gèrent avec `/permissions`.",
-    )
-    .addFields(
-      {
-        name: "🛡️ Modération",
-        value:
-          "`/warn` · `/warnings` · `/clearwarnings` · `/delwarning` → Avertissements\n" +
-          "`/kick` · `/ban` · `/unban` → Expulsion & bannissement\n" +
-          "`/timeout` · `/untimeout` → Mute temporaire\n" +
-          "`/purge <n>` → Supprimer des messages en masse",
-        inline: false,
-      },
-      {
-        name: "🔒 Salons",
-        value:
-          "`/lock` · `/unlock` → Verrouiller / déverrouiller un salon\n" +
-          "`/slowmode <secondes>` → Définir le délai entre messages",
-        inline: false,
-      },
-      {
-        name: "🔍 Utilitaires",
-        value:
-          "`/avatar [@user]` → Avatar HD + bannière\n" +
-          "`/serverinfo` → Carte détaillée du serveur\n" +
-          "`/userinfo [@user]` → Profil complet (badges, rôles, perms)\n" +
-          "`/roleinfo <rôle>` → Infos d'un rôle (membres, perms, couleur)\n" +
-          "`/stats` → Dashboard global du serveur\n" +
-          "`/membercount` → Compteur de membres en temps réel\n" +
-          "`/channelstats` → Top salons les plus actifs\n" +
-          "`/userstats [@user]` → Stats anti-spam d'un membre\n" +
-          "`/snipe` → Dernier message supprimé\n" +
-          "`/ping` → Latence du bot",
-        inline: false,
-      },
-      {
-        name: "📊 Sondages & Citations",
-        value:
-          "`/poll create <question> <opt1> <opt2> [opt3-5]` → Sondage avec votes live\n" +
-          "`/poll end <id>` → Fermer un sondage et afficher les résultats\n" +
-          "`/quote random` · `/quote add` · `/quote list` · `/quote delete` → Citations",
-        inline: false,
-      },
-      {
-        name: "📈 Niveaux & XP",
-        value:
-          "`/level [@user]` → Voir son niveau et sa progression\n" +
-          "`/leaderboard` → Classement XP / Messages / Vocal avec pagination et menu\n" +
-          "`/levelrole set <niveau> <rôle>` · `remove` · `list` → Récompenses de rôle\n" +
-          "`/xp give|take|set|reset <user>` *(admin)* → Ajuster l'XP manuellement\n" +
-          "`/levels enable|disable|status` *(admin)* → Activer / désactiver le système",
-        inline: false,
-      },
-      {
-        name: "🎰 Casino",
-        value:
-          "`/balance [@user]` → Voir son portefeuille\n" +
-          "`/daily` → Récompense quotidienne (+ bonus streak)\n" +
-          "`/slots <mise>` → Machine à sous\n" +
-          "`/blackjack <mise>` → Blackjack interactif (tirer / rester / doubler)\n" +
-          "`/roulette <mise> <choix>` → Roulette européenne\n" +
-          "`/economy top` → Classement des membres les plus riches\n" +
-          "`/economy give|take|set|reset <user>` *(admin)* → Gérer les pièces",
-        inline: false,
-      },
-      {
-        name: "🎟️ Tickets",
-        value:
-          "`/ticket setup` · `/ticket panel` → Créer le système de tickets *(admin)*\n" +
-          "`/ticket addsupportrole` · `/ticket removesupportrole` → Gérer les rôles support *(admin)*\n" +
-          "`/ticket config` → Voir / modifier la configuration *(admin)*\n" +
-          "`/ticket close` · `/ticket add` · `/ticket remove` → Gérer un ticket ouvert",
-        inline: false,
-      },
-      {
-        name: "📅 Événements",
-        value:
-          "`/event create <titre> <description> <date> <heure>` → Créer un événement\n" +
-          "`/event join <id>` · `/event leave <id>` → S'inscrire / se désinscrire\n" +
-          "`/event list` → Voir tous les événements à venir\n" +
-          "`/event info <id>` → Détails et liste des inscrits\n" +
-          "`/event cancel <id>` → Annuler un événement",
-        inline: false,
-      },
-      {
-        name: "🎵 Activité & Présence",
-        value:
-          "`/activity [@membre]` → Spotify live (cover, barre de progression) + infos jeu\n" +
-          "`/whoisplaying <jeu>` → Qui joue à un jeu en ce moment\n" +
-          "`/listening` → Qui écoute Spotify sur le serveur\n" +
-          "`/sessions` → Vue d'ensemble des activités actives du serveur",
-        inline: false,
-      },
-      {
-        name: "📣 Annonces & Messages",
-        value:
-          "`/say <message> [salon]` → Faire parler le bot dans un salon\n" +
-          "`/mention <cible> [message] [salon]` → Mentionner un membre ou un rôle\n" +
-          "`/announce <message> [salon] [embed]` → Annonce @everyone\n" +
-          "`/embed <message>` → Annonce en embed stylé\n" +
-          "`/dm <user> <message>` → Envoyer un message privé via le bot",
-        inline: false,
-      },
-      {
-        name: "⚙️ Configuration *(admin)*",
-        value:
-          "`/logs setup|status|disable` → Logs messages supprimés/modifiés + vocal\n" +
-          "`/aiwelcome setup|test|status|clear` → Message de bienvenue généré par IA\n" +
-          "`/autorole set|show|clear` → Rôle attribué automatiquement à l'arrivée\n" +
-          "`/automod enable|disable|status` → Anti-spam & détection IA de toxicité\n" +
-          "`/levels enable|disable|status` → Système de niveaux XP\n" +
-          "`/casino config view|set|reset` → Config casino (monnaie, mises, daily…)\n" +
-          "`/botrole add|remove|clear|list` → Rôles requis pour utiliser le bot\n" +
-          "`/permissions view|add-role|remove-role|add-user|remove-user|reset` → Accès\n" +
-          "`/setavatar` → Changer l'avatar du bot",
-        inline: false,
-      },
-      {
-        name: "🔐 Protection *(admin)*",
-        value:
-          "`/protection antinuke enable|disable|status|config` → Anti-nuke (bans/kicks/supp. massifs)\n" +
-          "`/protection antiraid enable|disable|status|config` → Anti-raid (jointures massives)\n" +
-          "`/protection antiwebhook enable|disable|status|config` → Suppression webhooks non autorisés",
-        inline: false,
-      },
-      {
-        name: "🤖 Auto-modération (automatique)",
-        value:
-          "• Anti-spam pondéré (débit, doublons, mentions massives, liens)\n" +
-          "• Détection IA de toxicité via `gpt-5-nano` — score ≥ 0.8 → suppression + warn\n" +
-          "• Score ≥ 0.95 → timeout 10 min supplémentaire\n" +
-          "• 3 avertissements auto → kick automatique\n" +
-          "• Boosters Nitro, propriétaire et modérateurs exemptés",
-        inline: false,
-      },
-    )
-    .setFooter({
-      text: `${commandDefinitions.length} commandes • Tape / pour les invoquer`,
-    })
-    .setTimestamp();
+// ─── Paginated help system ────────────────────────────────────────────────────
+
+const HELP_SELECT_ID = "help_cat";
+
+interface HelpPage {
+  label: string;
+  emoji: string;
+  description: string;
+  build: () => EmbedBuilder;
 }
+
+const HELP_PAGES: Record<string, HelpPage> = {
+  overview: {
+    label: "Vue d'ensemble",
+    emoji: "📜",
+    description: "Résumé de toutes les catégories",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("📜 Commandes — Vue d'ensemble")
+        .setDescription(
+          "Utilise le menu ci-dessous pour naviguer entre les catégories.\n" +
+          "Les commandes *(admin)* nécessitent **Gérer le serveur** ou **Administrateur**.",
+        )
+        .addFields(
+          { name: "🛡️ Modération", value: "`/warn` · `/kick` · `/ban` · `/timeout` · `/purge`…", inline: true },
+          { name: "🔒 Salons", value: "`/lock` · `/unlock` · `/slowmode`", inline: true },
+          { name: "🔍 Utilitaires", value: "`/avatar` · `/serverinfo` · `/userinfo` · `/snipe`…", inline: true },
+          { name: "📊 Sondages & Citations", value: "`/poll` · `/quote`", inline: true },
+          { name: "📈 Niveaux & XP", value: "`/level` · `/leaderboard` · `/levelrole`…", inline: true },
+          { name: "🎰 Casino", value: "`/balance` · `/daily` · `/slots` · `/blackjack`…", inline: true },
+          { name: "🎟️ Tickets", value: "`/ticket close` · `add` · `remove`", inline: true },
+          { name: "📅 Événements", value: "`/event create` · `join` · `list` · `info`…", inline: true },
+          { name: "🎵 Activité", value: "`/activity` · `/whoisplaying` · `/sessions`…", inline: true },
+          { name: "📣 Annonces", value: "`/say` · `/announce` · `/mention` · `/embed`…", inline: true },
+          { name: "⚙️ Config *(admin)*", value: "`/logs` · `/autorole` · `/automod` · `/casino config`…", inline: true },
+          { name: "🔐 Protection *(admin)*", value: "`/protection antinuke` · `antiraid` · `antiwebhook`", inline: true },
+        )
+        .setFooter({ text: `${commandDefinitions.length} commandes • Sélectionne une catégorie ↓` })
+        .setTimestamp(),
+  },
+
+  moderation: {
+    label: "Modération",
+    emoji: "🛡️",
+    description: "Avertissements, expulsions, bans…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(0xed4245)
+        .setTitle("🛡️ Modération")
+        .addFields(
+          { name: "/warn <user> <raison>", value: "Ajouter un avertissement", inline: false },
+          { name: "/warnings [@user]", value: "Voir les avertissements d'un membre", inline: false },
+          { name: "/clearwarnings <user>", value: "Supprimer tous les avertissements", inline: false },
+          { name: "/delwarning <user> <id>", value: "Supprimer un avertissement précis", inline: false },
+          { name: "/kick <user> [raison]", value: "Expulser un membre", inline: false },
+          { name: "/ban <user> [raison]", value: "Bannir un membre", inline: false },
+          { name: "/unban <user-id>", value: "Débannir un membre", inline: false },
+          { name: "/timeout <user> <durée>", value: "Mettre en sourdine temporairement", inline: false },
+          { name: "/untimeout <user>", value: "Retirer la sourdine", inline: false },
+          { name: "/purge <n>", value: "Supprimer les N derniers messages du salon", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  salons: {
+    label: "Salons",
+    emoji: "🔒",
+    description: "Verrouillage, slowmode…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🔒 Salons")
+        .addFields(
+          { name: "/lock [raison]", value: "Verrouiller le salon (personne ne peut écrire)", inline: false },
+          { name: "/unlock", value: "Déverrouiller le salon", inline: false },
+          { name: "/slowmode <secondes>", value: "Délai entre les messages (0 = désactiver)", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  utilitaires: {
+    label: "Utilitaires",
+    emoji: "🔍",
+    description: "Infos serveur, membres, stats…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🔍 Utilitaires")
+        .addFields(
+          { name: "/avatar [@user]", value: "Avatar HD + bannière d'un membre", inline: false },
+          { name: "/serverinfo", value: "Carte détaillée du serveur", inline: false },
+          { name: "/userinfo [@user]", value: "Profil complet : badges, rôles, permissions", inline: false },
+          { name: "/roleinfo <rôle>", value: "Infos d'un rôle : membres, perms, couleur", inline: false },
+          { name: "/stats", value: "Dashboard global du serveur", inline: false },
+          { name: "/membercount", value: "Compteur de membres en temps réel", inline: false },
+          { name: "/channelstats", value: "Top des salons les plus actifs", inline: false },
+          { name: "/userstats [@user]", value: "Stats anti-spam d'un membre", inline: false },
+          { name: "/snipe", value: "Dernier message supprimé du salon", inline: false },
+          { name: "/ping", value: "Latence du bot et de l'API Discord", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  sondages: {
+    label: "Sondages & Citations",
+    emoji: "📊",
+    description: "Polls, citations du serveur…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(0xfee75c)
+        .setTitle("📊 Sondages & Citations")
+        .addFields(
+          { name: "/poll create <question> <opt1> <opt2> [opt3-5]", value: "Sondage avec votes en temps réel", inline: false },
+          { name: "/poll end <id>", value: "Fermer un sondage et afficher les résultats", inline: false },
+          { name: "/quote random", value: "Citation aléatoire du serveur", inline: false },
+          { name: "/quote add <texte> [auteur]", value: "Ajouter une citation", inline: false },
+          { name: "/quote list", value: "Voir toutes les citations", inline: false },
+          { name: "/quote delete <id>", value: "Supprimer une citation", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  niveaux: {
+    label: "Niveaux & XP",
+    emoji: "📈",
+    description: "XP, classements, rôles de niveau…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(0x57f287)
+        .setTitle("📈 Niveaux & XP")
+        .setDescription("15-25 XP/message (cooldown 60s) • 10 XP/min en vocal (≥2 humains)\nFormule : `5L² + 50L + 100` XP pour passer au niveau suivant")
+        .addFields(
+          { name: "/level [@user]", value: "Niveau, XP et barre de progression", inline: false },
+          { name: "/leaderboard", value: "Classement XP / Messages / Vocal avec pagination", inline: false },
+          { name: "/levelrole set <niveau> <rôle>", value: "Attribuer un rôle à un niveau donné", inline: false },
+          { name: "/levelrole remove <niveau>", value: "Retirer la récompense d'un niveau", inline: false },
+          { name: "/levelrole list", value: "Voir toutes les récompenses configurées", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  casino: {
+    label: "Casino",
+    emoji: "🎰",
+    description: "Pièces, jeux, classements…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(0xfee75c)
+        .setTitle("🎰 Casino")
+        .addFields(
+          { name: "/balance [@user]", value: "Voir son portefeuille de pièces", inline: false },
+          { name: "/daily", value: "Récompense quotidienne (+ bonus streak)", inline: false },
+          { name: "/slots <mise>", value: "Machine à sous — 3 symboles pour gagner", inline: false },
+          { name: "/blackjack <mise>", value: "Blackjack interactif : tirer / rester / doubler", inline: false },
+          { name: "/roulette <mise> <choix>", value: "Roulette européenne (rouge/noir/pair/impair/numéro)", inline: false },
+          { name: "/economy top", value: "Classement des membres les plus riches", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  tickets: {
+    label: "Tickets",
+    emoji: "🎟️",
+    description: "Ouvrir, gérer, fermer des tickets…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🎟️ Tickets")
+        .addFields(
+          { name: "/ticket close", value: "Fermer le ticket actuel (et l'archiver)", inline: false },
+          { name: "/ticket add <user>", value: "Ajouter un membre au ticket ouvert", inline: false },
+          { name: "/ticket remove <user>", value: "Retirer un membre du ticket ouvert", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  evenements: {
+    label: "Événements",
+    emoji: "📅",
+    description: "Créer, rejoindre, annuler…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("📅 Événements")
+        .addFields(
+          { name: "/event create <titre> <description> <date> <heure>", value: "Créer un événement (JJ/MM/AAAA · HH:MM)\nOptions : places max, rappel en minutes avant le début", inline: false },
+          { name: "/event join <id>", value: "S'inscrire à un événement", inline: false },
+          { name: "/event leave <id>", value: "Se désinscrire d'un événement", inline: false },
+          { name: "/event list", value: "Voir tous les événements à venir du serveur", inline: false },
+          { name: "/event info <id>", value: "Détails complets + liste des inscrits", inline: false },
+          { name: "/event cancel <id>", value: "Annuler un événement (créateur ou admin)", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  activite: {
+    label: "Activité & Présence",
+    emoji: "🎵",
+    description: "Spotify, jeux en cours, sessions…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(0x1db954)
+        .setTitle("🎵 Activité & Présence")
+        .addFields(
+          { name: "/activity [@membre]", value: "Spotify live (cover + barre) ou jeu (rich presence)", inline: false },
+          { name: "/whoisplaying <jeu>", value: "Liste des membres qui jouent à un jeu", inline: false },
+          { name: "/listening", value: "Membres qui écoutent Spotify en ce moment", inline: false },
+          { name: "/sessions", value: "Vue d'ensemble : statuts, jeux actifs, Spotify, streams", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  annonces: {
+    label: "Annonces & Messages",
+    emoji: "📣",
+    description: "Say, announce, DM…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("📣 Annonces & Messages")
+        .addFields(
+          { name: "/say <message> [salon]", value: "Faire parler le bot dans un salon", inline: false },
+          { name: "/mention <cible> [message] [salon]", value: "Mentionner un membre ou un rôle", inline: false },
+          { name: "/announce <message> [salon] [embed]", value: "Annonce @everyone (option embed stylé)", inline: false },
+          { name: "/embed <message> [titre] [couleur]", value: "Annonce en embed personnalisé", inline: false },
+          { name: "/dm <user> <message>", value: "Envoyer un message privé via le bot", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  config: {
+    label: "Configuration (admin)",
+    emoji: "⚙️",
+    description: "Logs, autorole, automod… (admin)",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(COLOR_WARN)
+        .setTitle("⚙️ Configuration *(admin)*")
+        .setDescription("Ces commandes nécessitent **Gérer le serveur** ou **Administrateur**.")
+        .addFields(
+          { name: "/logs setup|status|disable", value: "Logs des messages supprimés/modifiés + vocal", inline: false },
+          { name: "/aiwelcome setup|test|status|clear", value: "Message de bienvenue généré par IA", inline: false },
+          { name: "/autorole set|show|clear", value: "Rôle automatique à l'arrivée d'un membre", inline: false },
+          { name: "/automod enable|disable|status", value: "Anti-spam & détection IA de toxicité", inline: false },
+          { name: "/levels enable|disable|status", value: "Activer / désactiver le système de niveaux XP", inline: false },
+          { name: "/casino config view|set|reset", value: "Config casino (monnaie, mises, daily…)", inline: false },
+          { name: "/botrole add|remove|clear|list", value: "Rôles requis pour utiliser le bot", inline: false },
+          { name: "/permissions view|add-role|remove-role|…", value: "Gérer les accès par catégorie", inline: false },
+          { name: "/xp give|take|set|reset <user>", value: "Ajuster l'XP manuellement", inline: false },
+          { name: "/economy give|take|set|reset <user>", value: "Gérer les pièces d'un membre", inline: false },
+          { name: "/setavatar", value: "Changer l'avatar du bot", inline: false },
+        )
+        .setTimestamp(),
+  },
+
+  protection: {
+    label: "Protection (admin)",
+    emoji: "🔐",
+    description: "Antinuke, antiraid, antiwebhook… (admin)",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(0xed4245)
+        .setTitle("🔐 Protection *(admin)*")
+        .setDescription("Ces commandes nécessitent **Administrateur**.")
+        .addFields(
+          { name: "/protection antinuke enable|disable|status|config", value: "Anti-nuke : bloque les bans/kicks/suppressions massifs", inline: false },
+          { name: "/protection antiraid enable|disable|status|config", value: "Anti-raid : bloque les jointures massives suspectes", inline: false },
+          { name: "/protection antiwebhook enable|disable|status|config", value: "Supprime les webhooks non autorisés", inline: false },
+        )
+        .setTimestamp(),
+  },
+};
+
+function buildHelpComponents(selected: string): ActionRowBuilder<StringSelectMenuBuilder> {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(HELP_SELECT_ID)
+    .setPlaceholder("📂 Choisir une catégorie…")
+    .addOptions(
+      Object.entries(HELP_PAGES).map(([key, page]) =>
+        new StringSelectMenuOptionBuilder()
+          .setLabel(page.label)
+          .setValue(key)
+          .setEmoji(page.emoji)
+          .setDescription(page.description)
+          .setDefault(key === selected),
+      ),
+    );
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
+}
+
+export { HELP_SELECT_ID };
 
 async function handleHelp(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
-  await reply(interaction, buildHelpEmbed(), true);
+  const page = HELP_PAGES["overview"]!;
+  await interaction.reply({
+    embeds: [page.build()],
+    components: [buildHelpComponents("overview")],
+    ephemeral: true,
+  });
 }
 
 async function handleCommands(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
-  await reply(interaction, buildHelpEmbed(), false);
+  const page = HELP_PAGES["overview"]!;
+  await interaction.reply({
+    embeds: [page.build()],
+    components: [buildHelpComponents("overview")],
+  });
 }
-
-const CATEGORY_EMBEDS: Record<string, () => EmbedBuilder> = {
-  moderation: () =>
-    new EmbedBuilder()
-      .setColor(0xed4245)
-      .setTitle("🛡️ Modération")
-      .addFields(
-        { name: "/warn <user> <raison>", value: "Ajouter un avertissement", inline: false },
-        { name: "/warnings [@user]", value: "Voir les avertissements d'un membre", inline: false },
-        { name: "/clearwarnings <user>", value: "Supprimer tous les avertissements", inline: false },
-        { name: "/delwarning <user> <id>", value: "Supprimer un avertissement précis", inline: false },
-        { name: "/kick <user> [raison]", value: "Expulser un membre", inline: false },
-        { name: "/ban <user> [raison]", value: "Bannir un membre", inline: false },
-        { name: "/unban <user-id>", value: "Débannir un membre", inline: false },
-        { name: "/timeout <user> <durée>", value: "Mettre en sourdine temporairement", inline: false },
-        { name: "/untimeout <user>", value: "Retirer la sourdine", inline: false },
-        { name: "/purge <n>", value: "Supprimer les N derniers messages du salon", inline: false },
-      ),
-
-  salons: () =>
-    new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle("🔒 Salons")
-      .addFields(
-        { name: "/lock [raison]", value: "Verrouiller le salon (personne ne peut écrire)", inline: false },
-        { name: "/unlock", value: "Déverrouiller le salon", inline: false },
-        { name: "/slowmode <secondes>", value: "Définir le délai entre les messages (0 = désactiver)", inline: false },
-      ),
-
-  utilitaires: () =>
-    new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle("🔍 Utilitaires")
-      .addFields(
-        { name: "/avatar [@user]", value: "Afficher l'avatar HD + bannière d'un membre", inline: false },
-        { name: "/serverinfo", value: "Carte détaillée du serveur (membres, canaux, boosts…)", inline: false },
-        { name: "/userinfo [@user]", value: "Profil complet : badges, rôles, permissions", inline: false },
-        { name: "/roleinfo <rôle>", value: "Infos d'un rôle : membres, perms, couleur", inline: false },
-        { name: "/stats", value: "Dashboard global du serveur", inline: false },
-        { name: "/membercount", value: "Compteur de membres en temps réel", inline: false },
-        { name: "/channelstats", value: "Top des salons les plus actifs", inline: false },
-        { name: "/userstats [@user]", value: "Stats anti-spam d'un membre", inline: false },
-        { name: "/snipe", value: "Afficher le dernier message supprimé du salon", inline: false },
-        { name: "/ping", value: "Latence du bot et de l'API Discord", inline: false },
-      ),
-
-  sondages: () =>
-    new EmbedBuilder()
-      .setColor(0xfee75c)
-      .setTitle("📊 Sondages & Citations")
-      .addFields(
-        { name: "/poll create <question> <opt1> <opt2> [opt3-5]", value: "Créer un sondage avec votes en temps réel", inline: false },
-        { name: "/poll end <id>", value: "Fermer un sondage et afficher les résultats", inline: false },
-        { name: "/quote random", value: "Citation aléatoire du serveur", inline: false },
-        { name: "/quote add <texte> [auteur]", value: "Ajouter une citation", inline: false },
-        { name: "/quote list", value: "Voir toutes les citations", inline: false },
-        { name: "/quote delete <id>", value: "Supprimer une citation", inline: false },
-      ),
-
-  niveaux: () =>
-    new EmbedBuilder()
-      .setColor(0x57f287)
-      .setTitle("📈 Niveaux & XP")
-      .setDescription("15-25 XP par message (cooldown 60s) • 10 XP/min en vocal (≥2 humains)\nFormule : `5L² + 50L + 100` XP pour passer au niveau L+1")
-      .addFields(
-        { name: "/level [@user]", value: "Voir son niveau, XP et barre de progression", inline: false },
-        { name: "/leaderboard", value: "Classement XP / Messages / Vocal avec pagination", inline: false },
-        { name: "/levelrole set <niveau> <rôle>", value: "Attribuer un rôle à un niveau donné", inline: false },
-        { name: "/levelrole remove <niveau>", value: "Retirer la récompense d'un niveau", inline: false },
-        { name: "/levelrole list", value: "Voir toutes les récompenses configurées", inline: false },
-      ),
-
-  casino: () =>
-    new EmbedBuilder()
-      .setColor(0xfee75c)
-      .setTitle("🎰 Casino")
-      .addFields(
-        { name: "/balance [@user]", value: "Voir son portefeuille de pièces", inline: false },
-        { name: "/daily", value: "Récompense quotidienne (+ bonus streak consécutif)", inline: false },
-        { name: "/slots <mise>", value: "Machine à sous — 3 symboles pour gagner", inline: false },
-        { name: "/blackjack <mise>", value: "Blackjack interactif : tirer / rester / doubler", inline: false },
-        { name: "/roulette <mise> <choix>", value: "Roulette européenne (rouge/noir/pair/impair/numéro)", inline: false },
-        { name: "/economy top", value: "Classement des membres les plus riches", inline: false },
-      ),
-
-  tickets: () =>
-    new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle("🎟️ Tickets")
-      .addFields(
-        { name: "/ticket close", value: "Fermer le ticket actuel (et l'archiver)", inline: false },
-        { name: "/ticket add <user>", value: "Ajouter un membre au ticket", inline: false },
-        { name: "/ticket remove <user>", value: "Retirer un membre du ticket", inline: false },
-      ),
-
-  evenements: () =>
-    new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle("📅 Événements")
-      .addFields(
-        { name: "/event create <titre> <description> <date> <heure>", value: "Créer un événement (date : JJ/MM/AAAA, heure : HH:MM)\nOptions : places max, rappel en minutes avant le début", inline: false },
-        { name: "/event join <id>", value: "S'inscrire à un événement", inline: false },
-        { name: "/event leave <id>", value: "Se désinscrire d'un événement", inline: false },
-        { name: "/event list", value: "Voir tous les événements à venir du serveur", inline: false },
-        { name: "/event info <id>", value: "Détails complets + liste des inscrits", inline: false },
-        { name: "/event cancel <id>", value: "Annuler un événement (créateur ou admin)", inline: false },
-      ),
-
-  activite: () =>
-    new EmbedBuilder()
-      .setColor(0x1db954)
-      .setTitle("🎵 Activité & Présence")
-      .addFields(
-        { name: "/activity [@membre]", value: "Activité en cours : Spotify (cover + barre live) ou jeu (session, détails rich presence)", inline: false },
-        { name: "/whoisplaying <jeu>", value: "Liste des membres qui jouent à un jeu (recherche partielle)", inline: false },
-        { name: "/listening", value: "Liste des membres qui écoutent Spotify en ce moment", inline: false },
-        { name: "/sessions", value: "Vue d'ensemble : statuts, jeux actifs, Spotify, streams", inline: false },
-      ),
-
-  annonces: () =>
-    new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle("📣 Annonces & Messages")
-      .addFields(
-        { name: "/say <message> [salon]", value: "Faire parler le bot dans un salon (sans mentions)", inline: false },
-        { name: "/mention <cible> [message] [salon]", value: "Mentionner un membre ou un rôle avec le bot", inline: false },
-        { name: "/announce <message> [salon] [embed]", value: "Envoyer une annonce @everyone (option embed stylé)", inline: false },
-        { name: "/embed <message> [titre] [couleur]", value: "Annonce en embed personnalisé dans le salon", inline: false },
-        { name: "/dm <user> <message>", value: "Envoyer un message privé via le bot", inline: false },
-      ),
-};
 
 async function handleShow(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   const cat = interaction.options.getString("categorie", true);
-  const builder = CATEGORY_EMBEDS[cat];
-  if (!builder) {
+  const page = HELP_PAGES[cat];
+  if (!page) {
     await interaction.reply({ content: "❌ Catégorie inconnue.", ephemeral: true });
     return;
   }
-  await interaction.reply({ embeds: [builder().setTimestamp()] });
+  await interaction.reply({
+    embeds: [page.build()],
+    components: [buildHelpComponents(cat)],
+  });
+}
+
+export async function handleHelpSelect(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const cat = interaction.values[0];
+  const page = HELP_PAGES[cat ?? "overview"] ?? HELP_PAGES["overview"]!;
+  await interaction.update({
+    embeds: [page.build()],
+    components: [buildHelpComponents(cat ?? "overview")],
+  });
 }
 
 async function handleAiWelcome(

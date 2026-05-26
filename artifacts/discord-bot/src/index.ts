@@ -12,10 +12,12 @@ import {
 } from "discord.js";
 import {
   commandDefinitions,
+  handleHelpSelect,
   handleInteraction,
   handleLeaderboardButton,
   handleLeaderboardSelect,
   handlePollVote,
+  HELP_SELECT_ID,
 } from "./commands.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
@@ -209,6 +211,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     try {
       if (interaction.customId === "lb_select") {
         await handleLeaderboardSelect(interaction);
+      } else if (interaction.customId === HELP_SELECT_ID) {
+        await handleHelpSelect(interaction);
       }
     } catch (err) {
       console.error("Select menu interaction error:", err);
