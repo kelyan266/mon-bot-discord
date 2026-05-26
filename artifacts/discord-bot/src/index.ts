@@ -25,6 +25,7 @@ import {
   generateWelcomeMessage,
   getWelcomeConfig,
 } from "./aiWelcome.js";
+import { aiChatEnabled, replyWithAI } from "./ai-chat.js";
 import { checkEventReminders } from "./events.js";
 import {
   handleAuditLogEntry,
@@ -250,6 +251,33 @@ client.on(Events.MessageCreate, async (message) => {
 
   const me = message.guild.members.me;
   if (!me) return;
+
+  const isMentioned =
+    message.mentions.users.has(client.user!.id) &&
+    !message.mentions.everyone;
+
+  if (isMentioned && aiChatEnabled) {
+    const text = message.content
+      .replace(/<@!?\d+>/g, "")
+      .trim();
+    if (text.length > 0) {
+      try {
+        await message.channel.sendTyping();
+        const aiReply = await replyWithAI({
+          guildId: message.guild.id,
+          channelId: message.channel.id,
+          userId: message.author.id,
+          username: message.author.username,
+          content: text,
+        });
+        await message.reply({ content: aiReply, allowedMentions: { repliedUser: false } });
+      } catch (err) {
+        console.error("AI chat reply failed:", err);
+      }
+    }
+    return;
+  }
+
   if (
     message.member.permissions.has("ManageMessages") ||
     message.member.id === message.guild.ownerId
