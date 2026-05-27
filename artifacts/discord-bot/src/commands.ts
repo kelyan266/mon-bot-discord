@@ -1683,6 +1683,19 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "spotify",
+      description: "Afficher la carte Spotify de ce que tu écoutes en ce moment",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "membre",
+          description: "Membre à inspecter (défaut : toi)",
+          required: false,
+        },
+      ],
+    },
+    {
       name: "whoisplaying",
       description: "Voir qui joue à un jeu sur le serveur",
       dm_permission: false,
@@ -2296,6 +2309,8 @@ export async function handleInteraction(
       return handleLogs(interaction);
     case "activity":
       return handleActivity(interaction);
+    case "spotify":
+      return handleSpotify(interaction);
     case "whoisplaying":
       return handleWhoIsPlaying(interaction);
     case "listening":
@@ -4668,6 +4683,92 @@ async function handleActivity(
   await interaction.reply({ embeds: embeds.slice(0, 10) });
 }
 
+async function handleSpotify(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const target = interaction.options.getMember("membre") as GuildMember | null;
+  const member = target ?? (interaction.member as GuildMember);
+
+  const spotifyAct = member.presence?.activities.find(
+    (a) => a.name === "Spotify" && a.type === ActivityType.Listening,
+  );
+
+  if (!spotifyAct) {
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x1db954)
+          .setAuthor({
+            name: member.user.username,
+            iconURL: member.user.displayAvatarURL(),
+          })
+          .setDescription(`🎵 **${member.user.username}** n'écoute rien sur Spotify en ce moment.`),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const now = Date.now();
+  const start = spotifyAct.timestamps?.start?.getTime() ?? now;
+  const end = spotifyAct.timestamps?.end?.getTime() ?? now + 1;
+  const duration = Math.max(end - start, 1);
+  const elapsed = Math.max(0, now - start);
+  const pct = Math.min(Math.round((elapsed / duration) * 100), 100);
+
+  const bar = ((): string => {
+    const len = 20;
+    const filled = Math.round((elapsed / duration) * len);
+    const dot = Math.min(filled, len - 1);
+    const chars = "─".repeat(len).split("");
+    chars[dot] = "🔘";
+    return chars.slice(0, dot).join("").replace(/─/g, "─") +
+      chars[dot] +
+      chars.slice(dot + 1).join("");
+  })();
+
+  const fmtMs = (ms: number): string => {
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  };
+
+  const track = spotifyAct.details ?? "Titre inconnu";
+  const artists = spotifyAct.state ?? "Artiste inconnu";
+  const album = spotifyAct.assets?.largeText ?? "";
+  const coverUrl = spotifyAct.assets?.largeImageURL() ?? null;
+
+  const platformEmoji =
+    Object.keys(member.presence?.clientStatus ?? {}).map((p) =>
+      ({ desktop: "🖥️", mobile: "📱", web: "🌐" })[p] ?? "",
+    ).join(" ");
+
+  const embed = new EmbedBuilder()
+    .setColor(0x1db954)
+    .setAuthor({
+      name: `${member.displayName} écoute Spotify`,
+      iconURL: member.user.displayAvatarURL(),
+    })
+    .setTitle(track)
+    .setURL(`https://open.spotify.com/search/${encodeURIComponent(track + " " + artists)}`)
+    .addFields(
+      { name: "🎤 Artiste", value: artists, inline: true },
+      { name: "💿 Album", value: album || "—", inline: true },
+      { name: "⏱️ Durée", value: `\`${fmtMs(elapsed)}\` / \`${fmtMs(duration)}\``, inline: true },
+    )
+    .setDescription(`\`${bar}\` **${pct}%**`)
+    .setFooter({
+      text: `Spotify ${platformEmoji}`,
+      iconURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/Spotify_logo_without_text.svg/168px-Spotify_logo_without_text.svg.png",
+    })
+    .setTimestamp();
+
+  if (coverUrl) {
+    embed.setImage(coverUrl);
+  }
+
+  await interaction.reply({ embeds: [embed] });
+}
+
 async function handleWhoIsPlaying(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -5458,7 +5559,8 @@ const HELP_PAGES: Record<string, HelpPage> = {
         .setColor(0x1db954)
         .setTitle("🎵 Activité & Présence")
         .addFields(
-          { name: "/activity [@membre]", value: "Spotify live (cover + barre) ou jeu (rich presence)", inline: false },
+          { name: "/spotify [@membre]", value: "Carte Spotify immersive (cover, barre de progression, artiste, album)", inline: false },
+          { name: "/activity [@membre]", value: "Toutes les activités : Spotify, jeu, stream, etc.", inline: false },
           { name: "/whoisplaying <jeu>", value: "Liste des membres qui jouent à un jeu", inline: false },
           { name: "/listening", value: "Membres qui écoutent Spotify en ce moment", inline: false },
           { name: "/sessions", value: "Vue d'ensemble : statuts, jeux actifs, Spotify, streams", inline: false },
