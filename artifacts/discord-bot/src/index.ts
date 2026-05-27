@@ -16,9 +16,11 @@ import {
   handleInteraction,
   handleLeaderboardButton,
   handleLeaderboardSelect,
+  handleMarryButton,
   handlePollVote,
   HELP_SELECT_ID,
 } from "./commands.js";
+import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
@@ -195,6 +197,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       if (interaction.customId.startsWith("lb_") && interaction.customId !== "lb_noop") {
         await handleLeaderboardButton(interaction);
+        return;
+      }
+      if (
+        interaction.customId.startsWith(MARRY_ACCEPT_PREFIX) ||
+        interaction.customId.startsWith(MARRY_DECLINE_PREFIX)
+      ) {
+        await handleMarryButton(interaction);
         return;
       }
       if (interaction.customId.startsWith("poll_")) {

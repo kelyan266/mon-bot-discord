@@ -146,6 +146,14 @@ import {
   setAutomodEnabled,
   setXpEnabled,
 } from "./settings.js";
+import {
+  divorce as marriageDivorce,
+  getPartner,
+  isMarried,
+  marry as marriageMarry,
+  MARRY_ACCEPT_PREFIX,
+  MARRY_DECLINE_PREFIX,
+} from "./marriage.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -779,6 +787,24 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
           required: true,
         },
       ],
+    },
+    {
+      name: "marry",
+      description: "💍 Faire une demande en mariage à un membre",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "membre",
+          description: "Le membre à qui tu veux te marier",
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "divorce",
+      description: "💔 Divorcer de ton partenaire actuel",
+      dm_permission: false,
     },
     {
       name: "permissions",
@@ -2379,6 +2405,10 @@ export async function handleInteraction(
       return handleMemberCount(interaction);
     case "rolemembers":
       return handleRoleMembers(interaction);
+    case "marry":
+      return handleMarry(interaction);
+    case "divorce":
+      return handleDivorce(interaction);
     default:
       await reply(
         interaction,
@@ -6463,6 +6493,172 @@ async function handleRoleMembers(
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleMarry(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const proposer = interaction.member as GuildMember;
+  const target = interaction.options.getMember("membre") as GuildMember | null;
+
+  if (!target) {
+    await interaction.reply({ content: "❌ Membre introuvable.", ephemeral: true });
+    return;
+  }
+  if (target.id === proposer.id) {
+    await interaction.reply({ content: "💔 Tu ne peux pas te marier avec toi-même.", ephemeral: true });
+    return;
+  }
+  if (target.user.bot) {
+    await interaction.reply({ content: "🤖 Tu ne peux pas te marier avec un bot.", ephemeral: true });
+    return;
+  }
+  if (isMarried(guild.id, proposer.id)) {
+    const partnerId = getPartner(guild.id, proposer.id);
+    await interaction.reply({
+      content: `💍 Tu es déjà marié(e) avec <@${partnerId}>. Utilise \`/divorce\` d'abord.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  if (isMarried(guild.id, target.id)) {
+    await interaction.reply({
+      content: `💔 <@${target.id}> est déjà marié(e).`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const acceptId = `${MARRY_ACCEPT_PREFIX}${proposer.id}_${target.id}`;
+  const declineId = `${MARRY_DECLINE_PREFIX}${proposer.id}_${target.id}`;
+
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(acceptId)
+      .setLabel("💍 Accepter")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(declineId)
+      .setLabel("💔 Refuser")
+      .setStyle(ButtonStyle.Danger),
+  );
+
+  const embed = new EmbedBuilder()
+    .setColor(0xff85a1)
+    .setTitle("💍 Demande en mariage !")
+    .setDescription(
+      `<@${proposer.id}> demande <@${target.id}> en mariage ! 💕\n\n` +
+      `<@${target.id}>, acceptes-tu cette demande ?`,
+    )
+    .setThumbnail(proposer.user.displayAvatarURL())
+    .setFooter({ text: "Cette demande expire dans 60 secondes" })
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed], components: [row] });
+
+  setTimeout(async () => {
+    try {
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x808080)
+            .setTitle("💍 Demande expirée")
+            .setDescription(`La demande de <@${proposer.id}> à <@${target.id}> a expiré.`),
+        ],
+        components: [],
+      });
+    } catch {
+      // message already updated
+    }
+  }, 60_000);
+}
+
+async function handleDivorce(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const member = interaction.member as GuildMember;
+
+  const partnerId = marriageDivorce(guild.id, member.id);
+  if (!partnerId) {
+    await interaction.reply({
+      content: "💔 Tu n'es pas marié(e).",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0xed4245)
+        .setTitle("💔 Divorce")
+        .setDescription(`<@${member.id}> et <@${partnerId}> sont maintenant divorcés.`)
+        .setTimestamp(),
+    ],
+  });
+}
+
+export async function handleMarryButton(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const { customId, guild } = interaction;
+  if (!guild) return;
+
+  const isAccept = customId.startsWith(MARRY_ACCEPT_PREFIX);
+  const rest = customId.slice(
+    isAccept ? MARRY_ACCEPT_PREFIX.length : MARRY_DECLINE_PREFIX.length,
+  );
+  const [proposerId, targetId] = rest.split("_") as [string, string];
+
+  if (interaction.user.id !== targetId) {
+    await interaction.reply({
+      content: "❌ Seul(e) la personne concernée peut répondre à cette demande.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (isAccept) {
+    if (isMarried(guild.id, proposerId) || isMarried(guild.id, targetId)) {
+      await interaction.update({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setTitle("💔 Demande annulée")
+            .setDescription("L'un des deux membres est déjà marié."),
+        ],
+        components: [],
+      });
+      return;
+    }
+    marriageMarry(guild.id, proposerId, targetId);
+    await interaction.update({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xff85a1)
+          .setTitle("💍 Mariage célébré ! 🎉")
+          .setDescription(
+            `<@${proposerId}> et <@${targetId}> sont maintenant mariés ! 💕\n\n` +
+            `Félicitations et longue vie à votre union ! 🥂`,
+          )
+          .setTimestamp(),
+      ],
+      components: [],
+    });
+  } else {
+    await interaction.update({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setTitle("💔 Demande refusée")
+          .setDescription(`<@${targetId}> a refusé la demande de <@${proposerId}>.`)
+          .setTimestamp(),
+      ],
+      components: [],
+    });
+  }
 }
 
 async function handlePermissions(
