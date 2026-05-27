@@ -768,6 +768,19 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "rolemembers",
+      description: "Compter et lister les membres ayant un rôle",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Role,
+          name: "role",
+          description: "Le rôle à inspecter",
+          required: true,
+        },
+      ],
+    },
+    {
       name: "permissions",
       description: "🔐 Gérer qui peut utiliser chaque catégorie de commandes",
       dm_permission: false,
@@ -2349,6 +2362,8 @@ export async function handleInteraction(
       return handleStats(interaction);
     case "membercount":
       return handleMemberCount(interaction);
+    case "rolemembers":
+      return handleRoleMembers(interaction);
     default:
       await reply(
         interaction,
@@ -5335,6 +5350,7 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/membercount", value: "Compteur de membres en temps réel", inline: false },
           { name: "/channelstats", value: "Top des salons les plus actifs", inline: false },
           { name: "/userstats [@user]", value: "Stats anti-spam d'un membre", inline: false },
+          { name: "/rolemembers <rôle>", value: "Compter et lister les membres ayant un rôle", inline: false },
           { name: "/snipe", value: "Dernier message supprimé du salon", inline: false },
           { name: "/ping", value: "Latence du bot et de l'API Discord", inline: false },
         )
@@ -6305,6 +6321,43 @@ async function handleMemberCount(
       { name: "📅 Serveur créé", value: `<t:${createdAt}:F> (<t:${createdAt}:R>)`, inline: false },
     )
     .setFooter({ text: `ID : ${guild.id} · Mis à jour` })
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleRoleMembers(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const role = interaction.options.getRole("role", true);
+
+  await interaction.deferReply();
+  await guild.members.fetch().catch(() => null);
+
+  const members = guild.members.cache
+    .filter((m) => m.roles.cache.has(role.id))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
+
+  const count = members.size;
+  const MAX_INLINE = 40;
+
+  const embed = new EmbedBuilder()
+    .setColor((role as import("discord.js").Role).color || COLOR_PRIMARY)
+    .setTitle(`Membres avec le rôle ${role.name}`)
+    .setDescription(
+      count === 0
+        ? "Aucun membre ne possède ce rôle."
+        : members
+            .first(MAX_INLINE)
+            .map((m) => `• ${m} — \`${m.user.tag}\``)
+            .join("\n") +
+          (count > MAX_INLINE
+            ? `\n*… et ${count - MAX_INLINE} autre${count - MAX_INLINE > 1 ? "s" : ""}*`
+            : ""),
+    )
+    .addFields({ name: "Total", value: `**${count}** membre${count !== 1 ? "s" : ""}`, inline: true })
+    .setFooter({ text: `ID du rôle : ${role.id}` })
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
