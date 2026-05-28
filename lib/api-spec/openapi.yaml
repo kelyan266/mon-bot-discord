@@ -330,6 +330,25 @@ paths:
                 items:
                   $ref: "#/components/schemas/Poll"
 
+  /bot/polls/{id}/close:
+    post:
+      operationId: closePoll
+      tags: [bot]
+      summary: Close a poll
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Poll closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Poll"
+
   /bot/guilds:
     get:
       operationId: getGuilds

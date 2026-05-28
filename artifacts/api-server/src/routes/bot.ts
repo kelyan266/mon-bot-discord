@@ -318,4 +318,21 @@ router.get("/bot/polls", (req, res) => {
   res.json(filtered);
 });
 
+router.post("/bot/polls/:id/close", (req, res) => {
+  const { id } = req.params;
+  const data = readJson<PollsData>("polls.json", { polls: {} });
+  const poll = data.polls[id];
+  if (!poll) {
+    res.status(404).json({ error: "Sondage introuvable" });
+    return;
+  }
+  if (poll.ended) {
+    res.status(400).json({ error: "Sondage déjà terminé" });
+    return;
+  }
+  poll.ended = true;
+  writeJson("polls.json", data);
+  res.json(poll);
+});
+
 export default router;

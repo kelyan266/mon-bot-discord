@@ -279,6 +279,24 @@ export const GetPollsResponseItem = zod.object({
 export const GetPollsResponse = zod.array(GetPollsResponseItem);
 
 /**
+ * @summary Close a poll
+ */
+export const ClosePollParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ClosePollResponse = zod.object({
+  id: zod.string(),
+  guildId: zod.string(),
+  question: zod.string(),
+  options: zod.array(zod.string()),
+  votes: zod.record(zod.string(), zod.number()),
+  ended: zod.boolean(),
+  createdAt: zod.number(),
+  creatorId: zod.string(),
+});
+
+/**
  * @summary List of guilds tracked by the bot
  */
 export const GetGuildsResponseItem = zod.object({

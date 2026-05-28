@@ -1465,6 +1465,90 @@ export function useGetPolls<
 }
 
 /**
+ * @summary Close a poll
+ */
+export const getClosePollUrl = (id: string) => {
+  return `/api/bot/polls/${id}/close`;
+};
+
+export const closePoll = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Poll> => {
+  return customFetch<Poll>(getClosePollUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getClosePollMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closePoll>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof closePoll>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["closePoll"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof closePoll>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return closePoll(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClosePollMutationResult = NonNullable<
+  Awaited<ReturnType<typeof closePoll>>
+>;
+
+export type ClosePollMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Close a poll
+ */
+export const useClosePoll = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closePoll>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof closePoll>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getClosePollMutationOptions(options));
+};
+
+/**
  * @summary List of guilds tracked by the bot
  */
 export const getGetGuildsUrl = () => {

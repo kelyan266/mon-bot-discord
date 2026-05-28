@@ -1,6 +1,10 @@
-import { useGetPolls } from "@workspace/api-client-react";
+import { useGetPolls, useClosePoll } from "@workspace/api-client-react";
 import { DEFAULT_GUILD, formatTs } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { getGetPollsQueryKey } from "@workspace/api-client-react";
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-muted rounded-lg ${className ?? ""}`} />;
@@ -8,6 +12,28 @@ function Skeleton({ className }: { className?: string }) {
 
 export default function Polls() {
   const { data, isLoading } = useGetPolls({ guildId: DEFAULT_GUILD });
+  const { mutate: closePoll, isPending } = useClosePoll();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  function handleClose(id: string) {
+    closePoll(
+      { id },
+      {
+        onSuccess: () => {
+          toast({ title: "✅ Sondage clôturé", description: "Le sondage a bien été fermé." });
+          queryClient.invalidateQueries({ queryKey: getGetPollsQueryKey({ guildId: DEFAULT_GUILD }) });
+        },
+        onError: (e: unknown) => {
+          toast({
+            title: "❌ Erreur",
+            description: (e as Error).message,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -72,6 +98,18 @@ export default function Polls() {
                   <span>{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</span>
                   <span>{formatTs(poll.createdAt)}</span>
                 </div>
+
+                {!poll.ended && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="w-full text-xs h-8"
+                    disabled={isPending}
+                    onClick={() => handleClose(poll.id)}
+                  >
+                    🔒 Clôturer le sondage
+                  </Button>
+                )}
               </div>
             );
           })}
