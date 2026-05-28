@@ -820,6 +820,19 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       dm_permission: false,
     },
     {
+      name: "hack",
+      description: "💻 Hack quelqu'un (troll)",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "cible",
+          description: "La victime",
+          required: true,
+        },
+      ],
+    },
+    {
       name: "voice",
       description: "Gérer ton salon vocal actuel",
       dm_permission: false,
@@ -2491,6 +2504,8 @@ export async function handleInteraction(
       return handleMarry(interaction);
     case "divorce":
       return handleDivorce(interaction);
+    case "hack":
+      return handleHack(interaction);
     case "voice":
       return handleVoiceCmd(interaction);
     case "tempvc":
@@ -6705,6 +6720,56 @@ async function handleDivorce(
         .setTimestamp(),
     ],
   });
+}
+
+async function handleHack(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const target = interaction.options.getUser("cible", true);
+  const hacker = interaction.user;
+
+  const steps = [
+    { bar: "█░░░░░░░░░  10%", line: "🔍 Localisation de la cible…" },
+    { bar: "███░░░░░░░  30%", line: "🌐 Contournement du pare-feu…" },
+    { bar: "█████░░░░░  50%", line: "🔐 Brute-force du mot de passe…" },
+    { bar: "███████░░░  70%", line: "📂 Accès aux fichiers secrets…" },
+    { bar: "█████████░  90%", line: "🍪 Vol des cookies Discord…" },
+    { bar: "██████████ 100%", line: "✅ Hack terminé." },
+  ];
+
+  const finals = [
+    `> Résultat : **${target.username}** regarde du contenu embarrassant sur YouTube`,
+    `> Résultat : **${target.username}** a 47 onglets ouverts et aucune idée pourquoi`,
+    `> Résultat : **${target.username}** a cherché « comment savoir si on est en train de se faire hacker » il y a 3 minutes`,
+    `> Résultat : **${target.username}** met encore son mot de passe dans le champ "Email"`,
+    `> Résultat : **${target.username}** utilise **123456** comme mot de passe depuis 2014`,
+    `> Résultat : **${target.username}** a cliqué sur "Vous avez gagné un iPhone" 4 fois ce mois-ci`,
+    `> Résultat : **${target.username}** stocke ses mots de passe dans un fichier nommé \`mdp.txt\` sur le bureau`,
+    `> Résultat : **${target.username}** a une caméra non scotchée sur son laptop — j'ai tout vu 💀`,
+  ];
+
+  const finalMsg = finals[Math.floor(Math.random() * finals.length)]!;
+
+  const buildEmbed = (stepIdx: number, done = false) => {
+    const step = steps[stepIdx]!;
+    return new EmbedBuilder()
+      .setColor(done ? 0x57f287 : 0xed4245)
+      .setTitle(done ? "💻 Hack réussi" : "💻 Hack en cours…")
+      .setDescription(
+        `**Hackeur :** <@${hacker.id}>\n**Cible :** <@${target.id}>\n\n` +
+        `\`\`\`ansi\n[2;31m${step.bar}[0m\n${step.line}\`\`\`` +
+        (done ? `\n\n${finalMsg}` : ""),
+      )
+      .setFooter({ text: done ? "🚔 La police arrive dans 3… 2… 1…" : "Ne pas éteindre votre PC…" })
+      .setTimestamp();
+  };
+
+  await interaction.reply({ embeds: [buildEmbed(0)] });
+
+  for (let i = 1; i < steps.length; i++) {
+    await new Promise((r) => setTimeout(r, 900 + Math.random() * 400));
+    await interaction.editReply({ embeds: [buildEmbed(i, i === steps.length - 1)] });
+  }
 }
 
 async function handleVoiceCmd(
