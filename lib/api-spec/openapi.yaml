@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: bot
+    description: Discord bot data
 paths:
   /healthz:
     get:
@@ -24,6 +26,129 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /bot/stats:
+    get:
+      operationId: getBotStats
+      tags: [bot]
+      summary: Overall bot statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotStats"
+
+  /bot/leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [bot]
+      summary: XP leaderboard for a guild
+      parameters:
+        - name: guildId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  /bot/economy:
+    get:
+      operationId: getEconomy
+      tags: [bot]
+      summary: Economy leaderboard for a guild
+      parameters:
+        - name: guildId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Economy entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EconomyEntry"
+
+  /bot/warnings:
+    get:
+      operationId: getWarnings
+      tags: [bot]
+      summary: Warnings list for a guild
+      parameters:
+        - name: guildId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Warnings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Warning"
+
+  /bot/polls:
+    get:
+      operationId: getPolls
+      tags: [bot]
+      summary: Polls for a guild
+      parameters:
+        - name: guildId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Polls
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Poll"
+
+  /bot/guilds:
+    get:
+      operationId: getGuilds
+      tags: [bot]
+      summary: List of guilds tracked by the bot
+      responses:
+        "200":
+          description: Guilds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Guild"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +159,127 @@ components:
       required:
         - status
 
+    BotStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalWarnings:
+          type: integer
+        activePolls:
+          type: integer
+        totalGuilds:
+          type: integer
+        topLevel:
+          type: integer
+        totalEconomyCoins:
+          type: integer
+      required:
+        - totalUsers
+        - totalWarnings
+        - activePolls
+        - totalGuilds
+        - topLevel
+        - totalEconomyCoins
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        userId:
+          type: string
+        xp:
+          type: integer
+        level:
+          type: integer
+        messageCount:
+          type: ["integer", "null"]
+        voiceMinutes:
+          type: ["integer", "null"]
+        rank:
+          type: integer
+      required:
+        - userId
+        - xp
+        - level
+        - rank
+
+    EconomyEntry:
+      type: object
+      properties:
+        userId:
+          type: string
+        balance:
+          type: integer
+        rank:
+          type: integer
+      required:
+        - userId
+        - balance
+        - rank
+
+    Warning:
+      type: object
+      properties:
+        id:
+          type: string
+        guildId:
+          type: string
+        userId:
+          type: string
+        moderatorId:
+          type: string
+        reason:
+          type: string
+        timestamp:
+          type: integer
+      required:
+        - id
+        - guildId
+        - userId
+        - moderatorId
+        - reason
+        - timestamp
+
+    Poll:
+      type: object
+      properties:
+        id:
+          type: string
+        guildId:
+          type: string
+        question:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+        votes:
+          type: object
+          additionalProperties:
+            type: integer
+        ended:
+          type: boolean
+        createdAt:
+          type: integer
+        creatorId:
+          type: string
+      required:
+        - id
+        - guildId
+        - question
+        - options
+        - votes
+        - ended
+        - createdAt
+        - creatorId
+
+    Guild:
+      type: object
+      properties:
+        id:
+          type: string
+        userCount:
+          type: integer
+      required:
+        - id
+        - userCount

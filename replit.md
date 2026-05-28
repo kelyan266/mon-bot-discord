@@ -25,6 +25,15 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 - `pnpm --filter @workspace/discord-bot run start` — run the Discord moderation bot
 
+## Bot Dashboard (`artifacts/dashboard`)
+
+React + Vite app at `/dashboard/`. Reads bot data via the API server.
+
+**Pages:** Vue d'ensemble (KPIs + charts), Classement XP, Économie, Modération, Sondages.
+**API routes** (`/api/bot/*`): `stats`, `leaderboard`, `economy`, `warnings`, `polls`, `guilds` — reads from `artifacts/discord-bot/data/*.json` directly.
+**Features:** CSV export, PDF export, dark mode toggle, auto-refresh dropdown (5 min / 10 min / 30 min).
+**Guild par défaut:** `1496898542424555562` — hardcodé dans `artifacts/dashboard/src/lib/constants.ts`.
+
 ## Discord Bot (`@workspace/discord-bot`)
 
 Long-running Node.js process (not a web artifact). Built with `discord.js` v14.

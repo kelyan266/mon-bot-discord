@@ -14,3 +14,93 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary Overall bot statistics
+ */
+export const GetBotStatsResponse = zod.object({
+  totalUsers: zod.number(),
+  totalWarnings: zod.number(),
+  activePolls: zod.number(),
+  totalGuilds: zod.number(),
+  topLevel: zod.number(),
+  totalEconomyCoins: zod.number(),
+});
+
+/**
+ * @summary XP leaderboard for a guild
+ */
+export const GetLeaderboardQueryParams = zod.object({
+  guildId: zod.coerce.string(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const GetLeaderboardResponseItem = zod.object({
+  userId: zod.string(),
+  xp: zod.number(),
+  level: zod.number(),
+  messageCount: zod.number().nullish(),
+  voiceMinutes: zod.number().nullish(),
+  rank: zod.number(),
+});
+export const GetLeaderboardResponse = zod.array(GetLeaderboardResponseItem);
+
+/**
+ * @summary Economy leaderboard for a guild
+ */
+export const GetEconomyQueryParams = zod.object({
+  guildId: zod.coerce.string(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const GetEconomyResponseItem = zod.object({
+  userId: zod.string(),
+  balance: zod.number(),
+  rank: zod.number(),
+});
+export const GetEconomyResponse = zod.array(GetEconomyResponseItem);
+
+/**
+ * @summary Warnings list for a guild
+ */
+export const GetWarningsQueryParams = zod.object({
+  guildId: zod.coerce.string(),
+});
+
+export const GetWarningsResponseItem = zod.object({
+  id: zod.string(),
+  guildId: zod.string(),
+  userId: zod.string(),
+  moderatorId: zod.string(),
+  reason: zod.string(),
+  timestamp: zod.number(),
+});
+export const GetWarningsResponse = zod.array(GetWarningsResponseItem);
+
+/**
+ * @summary Polls for a guild
+ */
+export const GetPollsQueryParams = zod.object({
+  guildId: zod.coerce.string(),
+});
+
+export const GetPollsResponseItem = zod.object({
+  id: zod.string(),
+  guildId: zod.string(),
+  question: zod.string(),
+  options: zod.array(zod.string()),
+  votes: zod.record(zod.string(), zod.number()),
+  ended: zod.boolean(),
+  createdAt: zod.number(),
+  creatorId: zod.string(),
+});
+export const GetPollsResponse = zod.array(GetPollsResponseItem);
+
+/**
+ * @summary List of guilds tracked by the bot
+ */
+export const GetGuildsResponseItem = zod.object({
+  id: zod.string(),
+  userCount: zod.number(),
+});
+export const GetGuildsResponse = zod.array(GetGuildsResponseItem);

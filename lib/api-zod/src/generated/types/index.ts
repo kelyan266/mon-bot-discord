@@ -6,4 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./botStats";
+export * from "./economyEntry";
+export * from "./getEconomyParams";
+export * from "./getLeaderboardParams";
+export * from "./getPollsParams";
+export * from "./getWarningsParams";
+export * from "./guild";
 export * from "./healthStatus";
+export * from "./leaderboardEntry";
+export * from "./poll";
+export * from "./pollVotes";
+export * from "./warning";

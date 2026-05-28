@@ -8,3 +8,74 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface BotStats {
+  totalUsers: number;
+  totalWarnings: number;
+  activePolls: number;
+  totalGuilds: number;
+  topLevel: number;
+  totalEconomyCoins: number;
+}
+
+export interface LeaderboardEntry {
+  userId: string;
+  xp: number;
+  level: number;
+  /** @nullable */
+  messageCount?: number | null;
+  /** @nullable */
+  voiceMinutes?: number | null;
+  rank: number;
+}
+
+export interface EconomyEntry {
+  userId: string;
+  balance: number;
+  rank: number;
+}
+
+export interface Warning {
+  id: string;
+  guildId: string;
+  userId: string;
+  moderatorId: string;
+  reason: string;
+  timestamp: number;
+}
+
+export type PollVotes = { [key: string]: number };
+
+export interface Poll {
+  id: string;
+  guildId: string;
+  question: string;
+  options: string[];
+  votes: PollVotes;
+  ended: boolean;
+  createdAt: number;
+  creatorId: string;
+}
+
+export interface Guild {
+  id: string;
+  userCount: number;
+}
+
+export type GetLeaderboardParams = {
+  guildId: string;
+  limit?: number;
+};
+
+export type GetEconomyParams = {
+  guildId: string;
+  limit?: number;
+};
+
+export type GetWarningsParams = {
+  guildId: string;
+};
+
+export type GetPollsParams = {
+  guildId: string;
+};

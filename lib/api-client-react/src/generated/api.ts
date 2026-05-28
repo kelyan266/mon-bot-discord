@@ -13,7 +13,19 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  BotStats,
+  EconomyEntry,
+  GetEconomyParams,
+  GetLeaderboardParams,
+  GetPollsParams,
+  GetWarningsParams,
+  Guild,
+  HealthStatus,
+  LeaderboardEntry,
+  Poll,
+  Warning,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
 import type { ErrorType } from "../custom-fetch";
@@ -92,6 +104,520 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Overall bot statistics
+ */
+export const getGetBotStatsUrl = () => {
+  return `/api/bot/stats`;
+};
+
+export const getBotStats = async (options?: RequestInit): Promise<BotStats> => {
+  return customFetch<BotStats>(getGetBotStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBotStatsQueryKey = () => {
+  return [`/api/bot/stats`] as const;
+};
+
+export const getGetBotStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBotStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBotStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBotStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBotStats>>> = ({
+    signal,
+  }) => getBotStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBotStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBotStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBotStats>>
+>;
+export type GetBotStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Overall bot statistics
+ */
+
+export function useGetBotStats<
+  TData = Awaited<ReturnType<typeof getBotStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBotStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBotStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary XP leaderboard for a guild
+ */
+export const getGetLeaderboardUrl = (params: GetLeaderboardParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bot/leaderboard?${stringifiedParams}`
+    : `/api/bot/leaderboard`;
+};
+
+export const getLeaderboard = async (
+  params: GetLeaderboardParams,
+  options?: RequestInit,
+): Promise<LeaderboardEntry[]> => {
+  return customFetch<LeaderboardEntry[]>(getGetLeaderboardUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLeaderboardQueryKey = (params?: GetLeaderboardParams) => {
+  return [`/api/bot/leaderboard`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetLeaderboardQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLeaderboard>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetLeaderboardParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLeaderboard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetLeaderboardQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeaderboard>>> = ({
+    signal,
+  }) => getLeaderboard(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLeaderboard>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLeaderboardQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLeaderboard>>
+>;
+export type GetLeaderboardQueryError = ErrorType<unknown>;
+
+/**
+ * @summary XP leaderboard for a guild
+ */
+
+export function useGetLeaderboard<
+  TData = Awaited<ReturnType<typeof getLeaderboard>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetLeaderboardParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLeaderboard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLeaderboardQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Economy leaderboard for a guild
+ */
+export const getGetEconomyUrl = (params: GetEconomyParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bot/economy?${stringifiedParams}`
+    : `/api/bot/economy`;
+};
+
+export const getEconomy = async (
+  params: GetEconomyParams,
+  options?: RequestInit,
+): Promise<EconomyEntry[]> => {
+  return customFetch<EconomyEntry[]>(getGetEconomyUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEconomyQueryKey = (params?: GetEconomyParams) => {
+  return [`/api/bot/economy`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetEconomyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEconomy>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetEconomyParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEconomy>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetEconomyQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getEconomy>>> = ({
+    signal,
+  }) => getEconomy(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEconomy>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEconomyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEconomy>>
+>;
+export type GetEconomyQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Economy leaderboard for a guild
+ */
+
+export function useGetEconomy<
+  TData = Awaited<ReturnType<typeof getEconomy>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetEconomyParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEconomy>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEconomyQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Warnings list for a guild
+ */
+export const getGetWarningsUrl = (params: GetWarningsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bot/warnings?${stringifiedParams}`
+    : `/api/bot/warnings`;
+};
+
+export const getWarnings = async (
+  params: GetWarningsParams,
+  options?: RequestInit,
+): Promise<Warning[]> => {
+  return customFetch<Warning[]>(getGetWarningsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWarningsQueryKey = (params?: GetWarningsParams) => {
+  return [`/api/bot/warnings`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetWarningsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWarnings>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetWarningsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWarnings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetWarningsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getWarnings>>> = ({
+    signal,
+  }) => getWarnings(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWarnings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWarningsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWarnings>>
+>;
+export type GetWarningsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Warnings list for a guild
+ */
+
+export function useGetWarnings<
+  TData = Awaited<ReturnType<typeof getWarnings>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetWarningsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWarnings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWarningsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Polls for a guild
+ */
+export const getGetPollsUrl = (params: GetPollsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bot/polls?${stringifiedParams}`
+    : `/api/bot/polls`;
+};
+
+export const getPolls = async (
+  params: GetPollsParams,
+  options?: RequestInit,
+): Promise<Poll[]> => {
+  return customFetch<Poll[]>(getGetPollsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPollsQueryKey = (params?: GetPollsParams) => {
+  return [`/api/bot/polls`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetPollsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPolls>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetPollsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPolls>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPollsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPolls>>> = ({
+    signal,
+  }) => getPolls(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPolls>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPollsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPolls>>
+>;
+export type GetPollsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Polls for a guild
+ */
+
+export function useGetPolls<
+  TData = Awaited<ReturnType<typeof getPolls>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetPollsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPolls>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPollsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List of guilds tracked by the bot
+ */
+export const getGetGuildsUrl = () => {
+  return `/api/bot/guilds`;
+};
+
+export const getGuilds = async (options?: RequestInit): Promise<Guild[]> => {
+  return customFetch<Guild[]>(getGetGuildsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetGuildsQueryKey = () => {
+  return [`/api/bot/guilds`] as const;
+};
+
+export const getGetGuildsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getGuilds>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getGuilds>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetGuildsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getGuilds>>> = ({
+    signal,
+  }) => getGuilds({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getGuilds>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetGuildsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getGuilds>>
+>;
+export type GetGuildsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List of guilds tracked by the bot
+ */
+
+export function useGetGuilds<
+  TData = Awaited<ReturnType<typeof getGuilds>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getGuilds>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetGuildsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
