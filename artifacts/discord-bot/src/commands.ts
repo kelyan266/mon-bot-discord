@@ -590,6 +590,8 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
             { name: "🎵 Activité & Présence", value: "activite" },
             { name: "🎙️ Vocal", value: "vocal" },
             { name: "📣 Annonces & Messages", value: "annonces" },
+            { name: "⚙️ Configuration (admin)", value: "config" },
+            { name: "🔐 Protection (admin)", value: "protection" },
           ],
         },
       ],
@@ -5874,6 +5876,7 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/announce <message> [salon] [embed]", value: "Annonce @everyone (option embed stylé)", inline: false },
           { name: "/embed <message> [titre] [couleur]", value: "Annonce en embed personnalisé", inline: false },
           { name: "/dm <user> <message>", value: "Envoyer un message privé via le bot", inline: false },
+          { name: "/partenariat <partenaire> <message> [lien] [image] [logo] [salon]", value: "Publier une annonce de partenariat formatée avec embed doré", inline: false },
         )
         .setTimestamp(),
   },
