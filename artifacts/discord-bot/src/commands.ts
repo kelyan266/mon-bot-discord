@@ -550,34 +550,73 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
     },
     {
       name: "embed",
-      description: "Post a styled announcement embed in this channel",
+      description: "Poster un embed stylé dans un salon",
       default_member_permissions:
         PermissionFlagsBits.ManageMessages.toString(),
       dm_permission: false,
       options: [
         {
           name: "message",
-          description: "The announcement text",
+          description: "Texte principal de l'embed (\\n pour sauter une ligne)",
           type: ApplicationCommandOptionType.String,
           required: true,
         },
         {
-          name: "title",
-          description: "Optional title (default: 📢 Annonce)",
+          name: "titre",
+          description: "Titre de l'embed (défaut : 📢 Annonce)",
           type: ApplicationCommandOptionType.String,
           required: false,
         },
         {
-          name: "color",
-          description: "Embed color",
+          name: "couleur",
+          description: "Couleur de la barre latérale",
           type: ApplicationCommandOptionType.String,
           required: false,
           choices: [
-            { name: "Blue", value: "blue" },
-            { name: "Green", value: "green" },
-            { name: "Yellow", value: "yellow" },
-            { name: "Red", value: "red" },
-            { name: "Purple", value: "purple" },
+            { name: "🔵 Bleu", value: "blue" },
+            { name: "🟢 Vert", value: "green" },
+            { name: "🟡 Jaune", value: "yellow" },
+            { name: "🔴 Rouge", value: "red" },
+            { name: "🟣 Violet", value: "purple" },
+            { name: "🟠 Orange", value: "orange" },
+            { name: "🩷 Rose", value: "pink" },
+            { name: "⚫ Noir", value: "black" },
+            { name: "⚪ Blanc", value: "white" },
+          ],
+        },
+        {
+          name: "image",
+          description: "URL d'une grande image affichée en bas de l'embed",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+        },
+        {
+          name: "thumbnail",
+          description: "URL d'une petite image affichée en haut à droite",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+        },
+        {
+          name: "footer",
+          description: "Texte personnalisé en pied de l'embed",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+        },
+        {
+          name: "salon",
+          description: "Salon cible (défaut : salon actuel)",
+          type: ApplicationCommandOptionType.Channel,
+          required: false,
+        },
+        {
+          name: "ping",
+          description: "Mentionner avant l'embed",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+          choices: [
+            { name: "@everyone", value: "everyone" },
+            { name: "@here", value: "here" },
+            { name: "Aucun", value: "none" },
           ],
         },
       ],
@@ -6000,42 +6039,79 @@ const EMBED_COLORS: Record<string, number> = {
   purple: 0x9b59b6,
 };
 
+const EMBED_EXTRA_COLORS: Record<string, number> = {
+  orange: 0xe67e22,
+  pink: 0xff6b9d,
+  black: 0x23272a,
+  white: 0xffffff,
+};
+
 async function handleEmbed(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   const text = interaction.options.getString("message", true);
-  const title = interaction.options.getString("title") ?? "📢 Annonce";
-  const colorChoice = interaction.options.getString("color") ?? "blue";
-  const color = EMBED_COLORS[colorChoice] ?? COLOR_PRIMARY;
+  const title = interaction.options.getString("titre") ?? "📢 Annonce";
+  const colorChoice = interaction.options.getString("couleur") ?? "blue";
+  const imageUrl = interaction.options.getString("image");
+  const thumbnailUrl = interaction.options.getString("thumbnail");
+  const footerText = interaction.options.getString("footer");
+  const targetChannel = interaction.options.getChannel("salon");
+  const ping = interaction.options.getString("ping") ?? "none";
 
-  const channel = interaction.channel;
-  if (!channel || !("send" in channel)) {
+  const color =
+    EMBED_COLORS[colorChoice] ??
+    EMBED_EXTRA_COLORS[colorChoice] ??
+    COLOR_PRIMARY;
+
+  const dest =
+    targetChannel && "send" in targetChannel
+      ? targetChannel
+      : interaction.channel;
+
+  if (!dest || !("send" in dest)) {
     await reply(
       interaction,
       new EmbedBuilder()
         .setColor(COLOR_DANGER)
-        .setDescription("This channel doesn't support sending messages."),
+        .setDescription("❌ Ce salon ne supporte pas l'envoi de messages."),
       true,
     );
     return;
   }
 
-  const announcement = new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(title)
     .setDescription(text.replaceAll("\\n", "\n"))
     .setFooter({
-      text: `Envoyé par ${interaction.user.tag}`,
+      text:
+        footerText ??
+        `Envoyé par ${interaction.user.displayName ?? interaction.user.username}`,
       iconURL: interaction.user.displayAvatarURL({ size: 64 }),
     })
     .setTimestamp();
 
-  await channel.send({ embeds: [announcement] });
+  if (imageUrl) embed.setImage(imageUrl);
+  if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
+
+  const pingContent =
+    ping === "everyone" ? "@everyone" : ping === "here" ? "@here" : undefined;
+
+  await (dest as { send: Function }).send({
+    content: pingContent,
+    embeds: [embed],
+  });
+
+  const destMention =
+    targetChannel && "toString" in targetChannel
+      ? ` dans ${targetChannel.toString()}`
+      : "";
+
   await reply(
     interaction,
     new EmbedBuilder()
       .setColor(COLOR_SUCCESS)
-      .setDescription("Embed posted."),
+      .setDescription(`✅ Embed publié${destMention}.`),
     true,
   );
 }
