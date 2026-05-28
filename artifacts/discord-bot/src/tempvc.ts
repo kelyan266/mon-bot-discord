@@ -12,56 +12,83 @@ interface TempVCEntry {
   locked: boolean;
 }
 
-type TempVCData = Record<string, TempVCEntry>;
+interface TempVCFile {
+  channels: Record<string, TempVCEntry>;
+  hubs: Record<string, string>;
+}
 
-function load(): TempVCData {
-  if (!existsSync(DATA_PATH)) return {};
+function load(): TempVCFile {
+  if (!existsSync(DATA_PATH)) return { channels: {}, hubs: {} };
   try {
-    return JSON.parse(readFileSync(DATA_PATH, "utf-8")) as TempVCData;
+    const raw = JSON.parse(readFileSync(DATA_PATH, "utf-8")) as unknown;
+    if (raw && typeof raw === "object" && "channels" in (raw as object)) {
+      return raw as TempVCFile;
+    }
+    return { channels: raw as Record<string, TempVCEntry>, hubs: {} };
   } catch {
-    return {};
+    return { channels: {}, hubs: {} };
   }
 }
 
-function save(data: TempVCData): void {
+function save(data: TempVCFile): void {
   mkdirSync(dirname(DATA_PATH), { recursive: true });
   writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
 export function registerTempVC(channelId: string, guildId: string, ownerId: string): void {
   const data = load();
-  data[channelId] = { ownerId, guildId, locked: false };
+  data.channels[channelId] = { ownerId, guildId, locked: false };
   save(data);
 }
 
 export function unregisterTempVC(channelId: string): void {
   const data = load();
-  delete data[channelId];
+  delete data.channels[channelId];
   save(data);
 }
 
 export function isTempVC(channelId: string): boolean {
-  return !!load()[channelId];
+  return !!load().channels[channelId];
 }
 
 export function getTempVCEntry(channelId: string): TempVCEntry | null {
-  return load()[channelId] ?? null;
+  return load().channels[channelId] ?? null;
 }
 
 export function setTempVCLocked(channelId: string, locked: boolean): void {
   const data = load();
-  if (data[channelId]) {
-    data[channelId]!.locked = locked;
+  if (data.channels[channelId]) {
+    data.channels[channelId]!.locked = locked;
     save(data);
   }
 }
 
 export function getOwnerTempVC(guildId: string, ownerId: string): string | null {
   const data = load();
-  for (const [channelId, entry] of Object.entries(data)) {
+  for (const [channelId, entry] of Object.entries(data.channels)) {
     if (entry.guildId === guildId && entry.ownerId === ownerId) return channelId;
   }
   return null;
+}
+
+export function setHub(guildId: string, channelId: string): void {
+  const data = load();
+  data.hubs[guildId] = channelId;
+  save(data);
+}
+
+export function removeHub(guildId: string): void {
+  const data = load();
+  delete data.hubs[guildId];
+  save(data);
+}
+
+export function getHub(guildId: string): string | null {
+  return load().hubs[guildId] ?? null;
+}
+
+export function isHubChannel(guildId: string, channelId: string): boolean {
+  return load().hubs[guildId] === channelId;
 }
 
 export async function cleanupTempVC(guild: Guild, channelId: string): Promise<void> {

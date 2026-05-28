@@ -21,7 +21,7 @@ import {
   HELP_SELECT_ID,
 } from "./commands.js";
 import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
-import { cleanupTempVC, isTempVC } from "./tempvc.js";
+import { cleanupTempVC, isHubChannel, isTempVC, registerTempVC } from "./tempvc.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
@@ -575,6 +575,41 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
         console.error("TempVC cleanup failed:", err),
       );
     }
+  }
+
+  // Hub auto-create: when a member joins the hub channel, spawn a personal temp VC
+  if (
+    newState.channelId &&
+    newState.channelId !== oldState.channelId &&
+    newState.guild &&
+    newState.member &&
+    !newState.member.user.bot &&
+    isHubChannel(newState.guild.id, newState.channelId)
+  ) {
+    void (async () => {
+      try {
+        const guild = newState.guild!;
+        const member = newState.member!;
+        const hubChannel = newState.channel;
+        const category = hubChannel?.parent ?? null;
+
+        const me = guild.members.me;
+        if (!me?.permissions.has(0x10n)) return; // ManageChannels
+
+        const channel = await guild.channels.create({
+          name: `🎙️ ${member.displayName}`,
+          type: ChannelType.GuildVoice,
+          parent: category,
+          userLimit: 0,
+          reason: `TempVC hub — ${member.user.tag}`,
+        });
+
+        registerTempVC(channel.id, guild.id, member.id);
+        await member.voice.setChannel(channel).catch(() => null);
+      } catch (err) {
+        console.error("Hub TempVC creation failed:", err);
+      }
+    })();
   }
 });
 

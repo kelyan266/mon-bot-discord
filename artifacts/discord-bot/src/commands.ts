@@ -148,10 +148,14 @@ import {
 } from "./settings.js";
 import {
   cleanupTempVC as _cleanupTempVC,
+  getHub,
   getOwnerTempVC,
   getTempVCEntry,
   isTempVC,
+  isHubChannel as _isHubChannel,
   registerTempVC,
+  removeHub,
+  setHub,
   setTempVCLocked,
 } from "./tempvc.js";
 import {
@@ -538,6 +542,7 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
             { name: "🎟️ Tickets", value: "tickets" },
             { name: "📅 Événements", value: "evenements" },
             { name: "🎵 Activité & Présence", value: "activite" },
+            { name: "🎙️ Vocal", value: "vocal" },
             { name: "📣 Annonces & Messages", value: "annonces" },
           ],
         },
@@ -861,6 +866,25 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
               required: true,
             },
           ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "sethub",
+          description: "Définir un salon vocal « hub » — le rejoindre crée un temp VC perso *(admin)*",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Channel,
+              name: "salon",
+              description: "Salon vocal hub",
+              required: true,
+              channel_types: [ChannelType.GuildVoice],
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "clearhub",
+          description: "Retirer le salon hub de ce serveur *(admin)*",
         },
       ],
     },
@@ -5479,6 +5503,7 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "🎟️ Tickets", value: "`/ticket close` · `add` · `remove`", inline: true },
           { name: "📅 Événements", value: "`/event create` · `join` · `list` · `info`…", inline: true },
           { name: "🎵 Activité", value: "`/activity` · `/whoisplaying` · `/sessions`…", inline: true },
+          { name: "🎙️ Vocal", value: "`/tempvc create` · `/tempvc rename` · `/voice lock`…", inline: true },
           { name: "📣 Annonces", value: "`/say` · `/announce` · `/mention` · `/embed`…", inline: true },
           { name: "⚙️ Config *(admin)*", value: "`/logs` · `/autorole` · `/automod` · `/casino config`…", inline: true },
           { name: "🔐 Protection *(admin)*", value: "`/protection antinuke` · `antiraid` · `antiwebhook`", inline: true },
@@ -5657,6 +5682,26 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/listening", value: "Membres qui écoutent Spotify en ce moment", inline: false },
           { name: "/sessions", value: "Vue d'ensemble : statuts, jeux actifs, Spotify, streams", inline: false },
         )
+        .setTimestamp(),
+  },
+
+  vocal: {
+    label: "Vocal",
+    emoji: "🎙️",
+    description: "Salons temporaires, hub, verrou…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("🎙️ Vocal")
+        .addFields(
+          { name: "/tempvc create [nom]", value: "Crée un salon vocal temporaire et t'y déplace. Supprimé automatiquement quand il est vide.", inline: false },
+          { name: "/tempvc rename <nom>", value: "Renomme ton salon temporaire actif.", inline: false },
+          { name: "/tempvc sethub <salon> *(admin)*", value: "Définit un salon « hub » : rejoindre ce salon crée automatiquement un temp VC perso pour chaque membre.", inline: false },
+          { name: "/tempvc clearhub *(admin)*", value: "Retire le salon hub de ce serveur.", inline: false },
+          { name: "/voice lock", value: "Verrouille le salon vocal où tu es — personne ne peut rejoindre.", inline: false },
+          { name: "/voice unlock", value: "Déverrouille le salon vocal.", inline: false },
+        )
+        .setFooter({ text: "Seul le créateur ou un admin peut verrouiller un salon temporaire." })
         .setTimestamp(),
   },
 
@@ -6805,6 +6850,49 @@ async function handleTempVC(
           .setColor(COLOR_PRIMARY)
           .setTitle("✏️ Salon renommé")
           .setDescription(`**${oldName}** → **${newName}**`)
+          .setTimestamp(),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (sub === "sethub") {
+    const hubChannel = interaction.options.getChannel("salon", true);
+    if (hubChannel.type !== ChannelType.GuildVoice) {
+      await interaction.reply({ content: "❌ Le hub doit être un salon vocal.", ephemeral: true });
+      return;
+    }
+    setHub(guild.id, hubChannel.id);
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setTitle("🎙️ Hub vocal configuré")
+          .setDescription(
+            `<#${hubChannel.id}> est maintenant le salon hub.\n\n` +
+            `Quand un membre le rejoint, je crée automatiquement un **salon vocal temporaire** perso et l'y déplace.`,
+          )
+          .setTimestamp(),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (sub === "clearhub") {
+    const existing = getHub(guild.id);
+    if (!existing) {
+      await interaction.reply({ content: "❌ Aucun hub n'est configuré sur ce serveur.", ephemeral: true });
+      return;
+    }
+    removeHub(guild.id);
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xfee75c)
+          .setTitle("🗑️ Hub vocal retiré")
+          .setDescription("Le salon hub a été supprimé. Plus aucun temp VC ne sera créé automatiquement.")
           .setTimestamp(),
       ],
       ephemeral: true,
