@@ -737,6 +737,12 @@ const CATEGORIES: Category[] = [
           { name: "url", description: "URL directe vers l'image", required: true },
         ],
       },
+      {
+        name: "/resetroles",
+        usage: "/resetroles",
+        description: "Réinitialiser les rôles du serveur.",
+        permissions: "Administrateur",
+      },
     ],
   },
   {
@@ -768,32 +774,6 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
-    id: "automod",
-    label: "Auto-Modération",
-    icon: Zap,
-    color: "#FEE75C",
-    commands: [
-      {
-        name: "/automod enable",
-        usage: "/automod enable",
-        description: "Activer l'auto-modération sur le serveur.",
-        details: "Active l'anti-spam (score pondéré) et la détection de toxicité IA.",
-        permissions: "Gérer le serveur",
-      },
-      {
-        name: "/automod disable",
-        usage: "/automod disable",
-        description: "Désactiver l'auto-modération.",
-        permissions: "Gérer le serveur",
-      },
-      {
-        name: "/automod status",
-        usage: "/automod status",
-        description: "Afficher l'état actuel de l'auto-modération.",
-      },
-    ],
-  },
-  {
     id: "fun",
     label: "Fun",
     icon: Smile,
@@ -807,6 +787,19 @@ const CATEGORIES: Category[] = [
         options: [
           { name: "cible", description: "Le membre à 'hacker'", required: true },
         ],
+      },
+      {
+        name: "/marry",
+        usage: "/marry <user>",
+        description: "Demander un membre en mariage sur le serveur.",
+        options: [
+          { name: "user", description: "Le membre à demander en mariage", required: true },
+        ],
+      },
+      {
+        name: "/divorce",
+        usage: "/divorce",
+        description: "Divorcer de ton partenaire actuel.",
       },
     ],
   },
@@ -933,15 +926,13 @@ export default function Commands() {
     })).filter((cat) => cat.commands.length > 0);
   }, [search]);
 
-  const totalCommands = CATEGORIES.reduce((s, c) => s + c.commands.length, 0);
-
   return (
     <div className="p-6 space-y-5 max-w-4xl mx-auto">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold">Commandes</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {totalCommands} commandes · {CATEGORIES.length} catégories
+            68 slash commands · {CATEGORIES.length} catégories
           </p>
         </div>
         <div className="relative w-64">
