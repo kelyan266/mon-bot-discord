@@ -6,8 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./blackjackCard";
+export * from "./blackjackState";
 export * from "./botStats";
+export * from "./casinoActionInput";
+export * from "./casinoActionInputAction";
+export * from "./casinoBalance";
+export * from "./casinoBetInput";
+export * from "./casinoConfig";
+export * from "./casinoDailyInput";
+export * from "./casinoRouletteInput";
+export * from "./dailyClaimResult";
 export * from "./economyEntry";
+export * from "./getCasinoBalanceParams";
+export * from "./getCasinoConfigParams";
 export * from "./getEconomyParams";
 export * from "./getLeaderboardParams";
 export * from "./getPollsParams";
@@ -18,6 +30,8 @@ export * from "./leaderboardEntry";
 export * from "./poll";
 export * from "./pollVotes";
 export * from "./resolveUsersParams";
+export * from "./rouletteResult";
+export * from "./slotsResult";
 export * from "./userProfile";
 export * from "./warning";
 export * from "./warningInput";

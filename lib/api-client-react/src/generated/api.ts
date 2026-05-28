@@ -17,8 +17,18 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  BlackjackState,
   BotStats,
+  CasinoActionInput,
+  CasinoBalance,
+  CasinoBetInput,
+  CasinoConfig,
+  CasinoDailyInput,
+  CasinoRouletteInput,
+  DailyClaimResult,
   EconomyEntry,
+  GetCasinoBalanceParams,
+  GetCasinoConfigParams,
   GetEconomyParams,
   GetLeaderboardParams,
   GetPollsParams,
@@ -28,6 +38,8 @@ import type {
   LeaderboardEntry,
   Poll,
   ResolveUsersParams,
+  RouletteResult,
+  SlotsResult,
   UserProfile,
   Warning,
   WarningInput,
@@ -736,6 +748,627 @@ export function useResolveUsers<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Casino configuration for a guild
+ */
+export const getGetCasinoConfigUrl = (params: GetCasinoConfigParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bot/casino/config?${stringifiedParams}`
+    : `/api/bot/casino/config`;
+};
+
+export const getCasinoConfig = async (
+  params: GetCasinoConfigParams,
+  options?: RequestInit,
+): Promise<CasinoConfig> => {
+  return customFetch<CasinoConfig>(getGetCasinoConfigUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCasinoConfigQueryKey = (params?: GetCasinoConfigParams) => {
+  return [`/api/bot/casino/config`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetCasinoConfigQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCasinoConfig>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetCasinoConfigParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCasinoConfig>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCasinoConfigQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCasinoConfig>>> = ({
+    signal,
+  }) => getCasinoConfig(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCasinoConfig>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCasinoConfigQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCasinoConfig>>
+>;
+export type GetCasinoConfigQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Casino configuration for a guild
+ */
+
+export function useGetCasinoConfig<
+  TData = Awaited<ReturnType<typeof getCasinoConfig>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetCasinoConfigParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCasinoConfig>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCasinoConfigQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary User balance and daily status
+ */
+export const getGetCasinoBalanceUrl = (params: GetCasinoBalanceParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bot/casino/balance?${stringifiedParams}`
+    : `/api/bot/casino/balance`;
+};
+
+export const getCasinoBalance = async (
+  params: GetCasinoBalanceParams,
+  options?: RequestInit,
+): Promise<CasinoBalance> => {
+  return customFetch<CasinoBalance>(getGetCasinoBalanceUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCasinoBalanceQueryKey = (
+  params?: GetCasinoBalanceParams,
+) => {
+  return [`/api/bot/casino/balance`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetCasinoBalanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCasinoBalance>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetCasinoBalanceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCasinoBalance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCasinoBalanceQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCasinoBalance>>
+  > = ({ signal }) => getCasinoBalance(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCasinoBalance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCasinoBalanceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCasinoBalance>>
+>;
+export type GetCasinoBalanceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary User balance and daily status
+ */
+
+export function useGetCasinoBalance<
+  TData = Awaited<ReturnType<typeof getCasinoBalance>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetCasinoBalanceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCasinoBalance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCasinoBalanceQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Claim daily reward
+ */
+export const getClaimCasinoDailyUrl = () => {
+  return `/api/bot/casino/daily`;
+};
+
+export const claimCasinoDaily = async (
+  casinoDailyInput: CasinoDailyInput,
+  options?: RequestInit,
+): Promise<DailyClaimResult> => {
+  return customFetch<DailyClaimResult>(getClaimCasinoDailyUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(casinoDailyInput),
+  });
+};
+
+export const getClaimCasinoDailyMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof claimCasinoDaily>>,
+    TError,
+    { data: BodyType<CasinoDailyInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof claimCasinoDaily>>,
+  TError,
+  { data: BodyType<CasinoDailyInput> },
+  TContext
+> => {
+  const mutationKey = ["claimCasinoDaily"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof claimCasinoDaily>>,
+    { data: BodyType<CasinoDailyInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return claimCasinoDaily(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClaimCasinoDailyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof claimCasinoDaily>>
+>;
+export type ClaimCasinoDailyMutationBody = BodyType<CasinoDailyInput>;
+export type ClaimCasinoDailyMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Claim daily reward
+ */
+export const useClaimCasinoDaily = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof claimCasinoDaily>>,
+    TError,
+    { data: BodyType<CasinoDailyInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof claimCasinoDaily>>,
+  TError,
+  { data: BodyType<CasinoDailyInput> },
+  TContext
+> => {
+  return useMutation(getClaimCasinoDailyMutationOptions(options));
+};
+
+/**
+ * @summary Play slots
+ */
+export const getPlayCasinoSlotsUrl = () => {
+  return `/api/bot/casino/slots`;
+};
+
+export const playCasinoSlots = async (
+  casinoBetInput: CasinoBetInput,
+  options?: RequestInit,
+): Promise<SlotsResult> => {
+  return customFetch<SlotsResult>(getPlayCasinoSlotsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(casinoBetInput),
+  });
+};
+
+export const getPlayCasinoSlotsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof playCasinoSlots>>,
+    TError,
+    { data: BodyType<CasinoBetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof playCasinoSlots>>,
+  TError,
+  { data: BodyType<CasinoBetInput> },
+  TContext
+> => {
+  const mutationKey = ["playCasinoSlots"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof playCasinoSlots>>,
+    { data: BodyType<CasinoBetInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return playCasinoSlots(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PlayCasinoSlotsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof playCasinoSlots>>
+>;
+export type PlayCasinoSlotsMutationBody = BodyType<CasinoBetInput>;
+export type PlayCasinoSlotsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Play slots
+ */
+export const usePlayCasinoSlots = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof playCasinoSlots>>,
+    TError,
+    { data: BodyType<CasinoBetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof playCasinoSlots>>,
+  TError,
+  { data: BodyType<CasinoBetInput> },
+  TContext
+> => {
+  return useMutation(getPlayCasinoSlotsMutationOptions(options));
+};
+
+/**
+ * @summary Play roulette
+ */
+export const getPlayCasinoRouletteUrl = () => {
+  return `/api/bot/casino/roulette`;
+};
+
+export const playCasinoRoulette = async (
+  casinoRouletteInput: CasinoRouletteInput,
+  options?: RequestInit,
+): Promise<RouletteResult> => {
+  return customFetch<RouletteResult>(getPlayCasinoRouletteUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(casinoRouletteInput),
+  });
+};
+
+export const getPlayCasinoRouletteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof playCasinoRoulette>>,
+    TError,
+    { data: BodyType<CasinoRouletteInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof playCasinoRoulette>>,
+  TError,
+  { data: BodyType<CasinoRouletteInput> },
+  TContext
+> => {
+  const mutationKey = ["playCasinoRoulette"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof playCasinoRoulette>>,
+    { data: BodyType<CasinoRouletteInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return playCasinoRoulette(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PlayCasinoRouletteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof playCasinoRoulette>>
+>;
+export type PlayCasinoRouletteMutationBody = BodyType<CasinoRouletteInput>;
+export type PlayCasinoRouletteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Play roulette
+ */
+export const usePlayCasinoRoulette = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof playCasinoRoulette>>,
+    TError,
+    { data: BodyType<CasinoRouletteInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof playCasinoRoulette>>,
+  TError,
+  { data: BodyType<CasinoRouletteInput> },
+  TContext
+> => {
+  return useMutation(getPlayCasinoRouletteMutationOptions(options));
+};
+
+/**
+ * @summary Start a blackjack game
+ */
+export const getStartCasinoBlackjackUrl = () => {
+  return `/api/bot/casino/blackjack/start`;
+};
+
+export const startCasinoBlackjack = async (
+  casinoBetInput: CasinoBetInput,
+  options?: RequestInit,
+): Promise<BlackjackState> => {
+  return customFetch<BlackjackState>(getStartCasinoBlackjackUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(casinoBetInput),
+  });
+};
+
+export const getStartCasinoBlackjackMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startCasinoBlackjack>>,
+    TError,
+    { data: BodyType<CasinoBetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startCasinoBlackjack>>,
+  TError,
+  { data: BodyType<CasinoBetInput> },
+  TContext
+> => {
+  const mutationKey = ["startCasinoBlackjack"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startCasinoBlackjack>>,
+    { data: BodyType<CasinoBetInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return startCasinoBlackjack(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartCasinoBlackjackMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startCasinoBlackjack>>
+>;
+export type StartCasinoBlackjackMutationBody = BodyType<CasinoBetInput>;
+export type StartCasinoBlackjackMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Start a blackjack game
+ */
+export const useStartCasinoBlackjack = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startCasinoBlackjack>>,
+    TError,
+    { data: BodyType<CasinoBetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startCasinoBlackjack>>,
+  TError,
+  { data: BodyType<CasinoBetInput> },
+  TContext
+> => {
+  return useMutation(getStartCasinoBlackjackMutationOptions(options));
+};
+
+/**
+ * @summary Blackjack action (hit, stand, double)
+ */
+export const getActionCasinoBlackjackUrl = () => {
+  return `/api/bot/casino/blackjack/action`;
+};
+
+export const actionCasinoBlackjack = async (
+  casinoActionInput: CasinoActionInput,
+  options?: RequestInit,
+): Promise<BlackjackState> => {
+  return customFetch<BlackjackState>(getActionCasinoBlackjackUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(casinoActionInput),
+  });
+};
+
+export const getActionCasinoBlackjackMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof actionCasinoBlackjack>>,
+    TError,
+    { data: BodyType<CasinoActionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof actionCasinoBlackjack>>,
+  TError,
+  { data: BodyType<CasinoActionInput> },
+  TContext
+> => {
+  const mutationKey = ["actionCasinoBlackjack"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof actionCasinoBlackjack>>,
+    { data: BodyType<CasinoActionInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return actionCasinoBlackjack(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ActionCasinoBlackjackMutationResult = NonNullable<
+  Awaited<ReturnType<typeof actionCasinoBlackjack>>
+>;
+export type ActionCasinoBlackjackMutationBody = BodyType<CasinoActionInput>;
+export type ActionCasinoBlackjackMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Blackjack action (hit, stand, double)
+ */
+export const useActionCasinoBlackjack = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof actionCasinoBlackjack>>,
+    TError,
+    { data: BodyType<CasinoActionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof actionCasinoBlackjack>>,
+  TError,
+  { data: BodyType<CasinoActionInput> },
+  TContext
+> => {
+  return useMutation(getActionCasinoBlackjackMutationOptions(options));
+};
 
 /**
  * @summary Polls for a guild

@@ -78,6 +78,98 @@ export interface UserProfile {
   avatarUrl?: string | null;
 }
 
+export interface CasinoDailyInput {
+  guildId: string;
+  userId: string;
+}
+
+export interface CasinoBetInput {
+  guildId: string;
+  userId: string;
+  bet: number;
+}
+
+export interface CasinoRouletteInput {
+  guildId: string;
+  userId: string;
+  bet: number;
+  choice: string;
+}
+
+export type CasinoActionInputAction =
+  (typeof CasinoActionInputAction)[keyof typeof CasinoActionInputAction];
+
+export const CasinoActionInputAction = {
+  hit: "hit",
+  stand: "stand",
+  double: "double",
+} as const;
+
+export interface CasinoActionInput {
+  userId: string;
+  action: CasinoActionInputAction;
+}
+
+export interface CasinoConfig {
+  currency: string;
+  minBet: number;
+  maxBet: number;
+  startingBalance: number;
+  dailyAmount: number;
+  slotsJackpotMultiplier: number;
+}
+
+export interface CasinoBalance {
+  balance: number;
+  streak: number;
+  canDaily: boolean;
+  nextDailyMs: number;
+}
+
+export interface DailyClaimResult {
+  balance: number;
+  earned: number;
+  streak: number;
+  bonusAmount: number;
+}
+
+export interface SlotsResult {
+  reels: string[];
+  multiplier: number;
+  winnings: number;
+  net: number;
+  balance: number;
+  resultType: string;
+}
+
+export interface RouletteResult {
+  roll: number;
+  color: string;
+  won: boolean;
+  multiplier: number;
+  label: string;
+  winnings: number;
+  net: number;
+  balance: number;
+}
+
+export interface BlackjackCard {
+  rank: string;
+  suit: string;
+}
+
+export interface BlackjackState {
+  status: string;
+  playerHand: BlackjackCard[];
+  dealerHand: BlackjackCard[];
+  playerValue: number;
+  dealerValue: number;
+  bet: number;
+  payout: number;
+  balance: number;
+  canDouble: boolean;
+}
+
 export type GetLeaderboardParams = {
   guildId: string;
   limit?: number;
@@ -97,6 +189,15 @@ export type ResolveUsersParams = {
    * Comma-separated list of Discord user IDs
    */
   ids: string;
+};
+
+export type GetCasinoConfigParams = {
+  guildId: string;
+};
+
+export type GetCasinoBalanceParams = {
+  guildId: string;
+  userId: string;
 };
 
 export type GetPollsParams = {

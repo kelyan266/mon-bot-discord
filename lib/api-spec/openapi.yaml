@@ -171,6 +171,144 @@ paths:
                 items:
                   $ref: "#/components/schemas/UserProfile"
 
+  /bot/casino/config:
+    get:
+      operationId: getCasinoConfig
+      tags: [bot]
+      summary: Casino configuration for a guild
+      parameters:
+        - name: guildId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Casino config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CasinoConfig"
+
+  /bot/casino/balance:
+    get:
+      operationId: getCasinoBalance
+      tags: [bot]
+      summary: User balance and daily status
+      parameters:
+        - name: guildId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Balance info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CasinoBalance"
+
+  /bot/casino/daily:
+    post:
+      operationId: claimCasinoDaily
+      tags: [bot]
+      summary: Claim daily reward
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CasinoDailyInput"
+      responses:
+        "200":
+          description: Daily claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyClaimResult"
+
+  /bot/casino/slots:
+    post:
+      operationId: playCasinoSlots
+      tags: [bot]
+      summary: Play slots
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CasinoBetInput"
+      responses:
+        "200":
+          description: Slots result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlotsResult"
+
+  /bot/casino/roulette:
+    post:
+      operationId: playCasinoRoulette
+      tags: [bot]
+      summary: Play roulette
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CasinoRouletteInput"
+      responses:
+        "200":
+          description: Roulette result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouletteResult"
+
+  /bot/casino/blackjack/start:
+    post:
+      operationId: startCasinoBlackjack
+      tags: [bot]
+      summary: Start a blackjack game
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CasinoBetInput"
+      responses:
+        "200":
+          description: Blackjack state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlackjackState"
+
+  /bot/casino/blackjack/action:
+    post:
+      operationId: actionCasinoBlackjack
+      tags: [bot]
+      summary: Blackjack action (hit, stand, double)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CasinoActionInput"
+      responses:
+        "200":
+          description: Updated blackjack state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlackjackState"
+
   /bot/polls:
     get:
       operationId: getPolls
@@ -373,3 +511,204 @@ components:
       required:
         - id
         - username
+
+    CasinoDailyInput:
+      type: object
+      properties:
+        guildId:
+          type: string
+        userId:
+          type: string
+      required: [guildId, userId]
+
+    CasinoBetInput:
+      type: object
+      properties:
+        guildId:
+          type: string
+        userId:
+          type: string
+        bet:
+          type: integer
+      required: [guildId, userId, bet]
+
+    CasinoRouletteInput:
+      type: object
+      properties:
+        guildId:
+          type: string
+        userId:
+          type: string
+        bet:
+          type: integer
+        choice:
+          type: string
+      required: [guildId, userId, bet, choice]
+
+    CasinoActionInput:
+      type: object
+      properties:
+        userId:
+          type: string
+        action:
+          type: string
+          enum: [hit, stand, double]
+      required: [userId, action]
+
+    CasinoConfig:
+      type: object
+      properties:
+        currency:
+          type: string
+        minBet:
+          type: integer
+        maxBet:
+          type: integer
+        startingBalance:
+          type: integer
+        dailyAmount:
+          type: integer
+        slotsJackpotMultiplier:
+          type: integer
+      required:
+        - currency
+        - minBet
+        - maxBet
+        - startingBalance
+        - dailyAmount
+        - slotsJackpotMultiplier
+
+    CasinoBalance:
+      type: object
+      properties:
+        balance:
+          type: integer
+        streak:
+          type: integer
+        canDaily:
+          type: boolean
+        nextDailyMs:
+          type: integer
+      required:
+        - balance
+        - streak
+        - canDaily
+        - nextDailyMs
+
+    DailyClaimResult:
+      type: object
+      properties:
+        balance:
+          type: integer
+        earned:
+          type: integer
+        streak:
+          type: integer
+        bonusAmount:
+          type: integer
+      required:
+        - balance
+        - earned
+        - streak
+        - bonusAmount
+
+    SlotsResult:
+      type: object
+      properties:
+        reels:
+          type: array
+          items:
+            type: string
+        multiplier:
+          type: number
+        winnings:
+          type: integer
+        net:
+          type: integer
+        balance:
+          type: integer
+        resultType:
+          type: string
+      required:
+        - reels
+        - multiplier
+        - winnings
+        - net
+        - balance
+        - resultType
+
+    RouletteResult:
+      type: object
+      properties:
+        roll:
+          type: integer
+        color:
+          type: string
+        won:
+          type: boolean
+        multiplier:
+          type: integer
+        label:
+          type: string
+        winnings:
+          type: integer
+        net:
+          type: integer
+        balance:
+          type: integer
+      required:
+        - roll
+        - color
+        - won
+        - multiplier
+        - label
+        - winnings
+        - net
+        - balance
+
+    BlackjackCard:
+      type: object
+      properties:
+        rank:
+          type: string
+        suit:
+          type: string
+      required:
+        - rank
+        - suit
+
+    BlackjackState:
+      type: object
+      properties:
+        status:
+          type: string
+        playerHand:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlackjackCard"
+        dealerHand:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlackjackCard"
+        playerValue:
+          type: integer
+        dealerValue:
+          type: integer
+        bet:
+          type: integer
+        payout:
+          type: integer
+        balance:
+          type: integer
+        canDouble:
+          type: boolean
+      required:
+        - status
+        - playerHand
+        - dealerHand
+        - playerValue
+        - dealerValue
+        - bet
+        - payout
+        - balance
+        - canDouble

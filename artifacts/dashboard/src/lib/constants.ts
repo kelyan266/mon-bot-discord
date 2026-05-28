@@ -6,6 +6,7 @@ export const NAV_ITEMS = [
   { path: "/economy", label: "Économie", icon: "Coins" },
   { path: "/moderation", label: "Modération", icon: "ShieldAlert" },
   { path: "/polls", label: "Sondages", icon: "BarChart3" },
+  { path: "/casino", label: "Casino", icon: "Dice5" },
   { path: "/commands", label: "Commandes", icon: "Terminal" },
 ] as const;
 

@@ -13,6 +13,7 @@ import Economy from "@/pages/Economy";
 import Moderation from "@/pages/Moderation";
 import Polls from "@/pages/Polls";
 import Commands from "@/pages/Commands";
+import Casino from "@/pages/Casino";
 import { NAV_ITEMS } from "@/lib/constants";
 
 const queryClient = new QueryClient({
@@ -30,6 +31,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/economy": "Économie",
   "/moderation": "Modération",
   "/polls": "Sondages",
+  "/casino": "Casino 🎰",
   "/commands": "Commandes",
 };
 
@@ -38,7 +40,7 @@ function DashboardShell() {
   const [location] = useLocation();
   const { theme } = useTheme();
 
-  const title = PAGE_TITLES[location] ?? "Dashboard";
+  const title = PAGE_TITLES[location] ?? "Casino";
 
   return (
     <div className={`flex h-screen overflow-hidden bg-background ${theme}`}>
@@ -52,6 +54,7 @@ function DashboardShell() {
             <Route path="/economy" component={Economy} />
             <Route path="/moderation" component={Moderation} />
             <Route path="/polls" component={Polls} />
+            <Route path="/casino" component={Casino} />
             <Route path="/commands" component={Commands} />
             <Route component={NotFound} />
           </Switch>

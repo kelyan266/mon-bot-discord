@@ -114,6 +114,152 @@ export const ResolveUsersResponseItem = zod.object({
 export const ResolveUsersResponse = zod.array(ResolveUsersResponseItem);
 
 /**
+ * @summary Casino configuration for a guild
+ */
+export const GetCasinoConfigQueryParams = zod.object({
+  guildId: zod.coerce.string(),
+});
+
+export const GetCasinoConfigResponse = zod.object({
+  currency: zod.string(),
+  minBet: zod.number(),
+  maxBet: zod.number(),
+  startingBalance: zod.number(),
+  dailyAmount: zod.number(),
+  slotsJackpotMultiplier: zod.number(),
+});
+
+/**
+ * @summary User balance and daily status
+ */
+export const GetCasinoBalanceQueryParams = zod.object({
+  guildId: zod.coerce.string(),
+  userId: zod.coerce.string(),
+});
+
+export const GetCasinoBalanceResponse = zod.object({
+  balance: zod.number(),
+  streak: zod.number(),
+  canDaily: zod.boolean(),
+  nextDailyMs: zod.number(),
+});
+
+/**
+ * @summary Claim daily reward
+ */
+export const ClaimCasinoDailyBody = zod.object({
+  guildId: zod.string(),
+  userId: zod.string(),
+});
+
+export const ClaimCasinoDailyResponse = zod.object({
+  balance: zod.number(),
+  earned: zod.number(),
+  streak: zod.number(),
+  bonusAmount: zod.number(),
+});
+
+/**
+ * @summary Play slots
+ */
+export const PlayCasinoSlotsBody = zod.object({
+  guildId: zod.string(),
+  userId: zod.string(),
+  bet: zod.number(),
+});
+
+export const PlayCasinoSlotsResponse = zod.object({
+  reels: zod.array(zod.string()),
+  multiplier: zod.number(),
+  winnings: zod.number(),
+  net: zod.number(),
+  balance: zod.number(),
+  resultType: zod.string(),
+});
+
+/**
+ * @summary Play roulette
+ */
+export const PlayCasinoRouletteBody = zod.object({
+  guildId: zod.string(),
+  userId: zod.string(),
+  bet: zod.number(),
+  choice: zod.string(),
+});
+
+export const PlayCasinoRouletteResponse = zod.object({
+  roll: zod.number(),
+  color: zod.string(),
+  won: zod.boolean(),
+  multiplier: zod.number(),
+  label: zod.string(),
+  winnings: zod.number(),
+  net: zod.number(),
+  balance: zod.number(),
+});
+
+/**
+ * @summary Start a blackjack game
+ */
+export const StartCasinoBlackjackBody = zod.object({
+  guildId: zod.string(),
+  userId: zod.string(),
+  bet: zod.number(),
+});
+
+export const StartCasinoBlackjackResponse = zod.object({
+  status: zod.string(),
+  playerHand: zod.array(
+    zod.object({
+      rank: zod.string(),
+      suit: zod.string(),
+    }),
+  ),
+  dealerHand: zod.array(
+    zod.object({
+      rank: zod.string(),
+      suit: zod.string(),
+    }),
+  ),
+  playerValue: zod.number(),
+  dealerValue: zod.number(),
+  bet: zod.number(),
+  payout: zod.number(),
+  balance: zod.number(),
+  canDouble: zod.boolean(),
+});
+
+/**
+ * @summary Blackjack action (hit, stand, double)
+ */
+export const ActionCasinoBlackjackBody = zod.object({
+  userId: zod.string(),
+  action: zod.enum(["hit", "stand", "double"]),
+});
+
+export const ActionCasinoBlackjackResponse = zod.object({
+  status: zod.string(),
+  playerHand: zod.array(
+    zod.object({
+      rank: zod.string(),
+      suit: zod.string(),
+    }),
+  ),
+  dealerHand: zod.array(
+    zod.object({
+      rank: zod.string(),
+      suit: zod.string(),
+    }),
+  ),
+  playerValue: zod.number(),
+  dealerValue: zod.number(),
+  bet: zod.number(),
+  payout: zod.number(),
+  balance: zod.number(),
+  canDouble: zod.boolean(),
+});
+
+/**
  * @summary Polls for a guild
  */
 export const GetPollsQueryParams = zod.object({
