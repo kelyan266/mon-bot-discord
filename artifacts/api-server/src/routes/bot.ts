@@ -1,8 +1,11 @@
 import { Router } from "express";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { fileURLToPath } from "url";
 
-const DATA_DIR = join(process.cwd(), "artifacts/discord-bot/data");
+const DATA_DIR = join(
+  fileURLToPath(new URL("../../discord-bot/data", import.meta.url)),
+);
 
 function readJson<T>(file: string, fallback: T): T {
   const p = join(DATA_DIR, file);
@@ -66,6 +69,12 @@ interface PollsData {
 }
 
 const router = Router();
+
+router.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  next();
+});
 
 router.get("/bot/guilds", (_req, res) => {
   const levels = readJson<LevelsData>("levels.json", { users: {} });
