@@ -492,6 +492,52 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "partenariat",
+      description: "Publier une annonce de partenariat avec @everyone",
+      default_member_permissions: PermissionFlagsBits.MentionEveryone.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "partenaire",
+          description: "Nom du partenaire / serveur",
+          required: true,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "message",
+          description: "Description du partenariat (\\n pour sauter une ligne)",
+          required: true,
+          max_length: 2000,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "lien",
+          description: "Lien d'invitation ou site du partenaire",
+          required: false,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "image",
+          description: "URL d'une image / bannière (affichée en grand en bas)",
+          required: false,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "logo",
+          description: "URL du logo du partenaire (petite image en haut à droite)",
+          required: false,
+        },
+        {
+          type: ApplicationCommandOptionType.Channel,
+          name: "salon",
+          description: "Salon cible (défaut : salon actuel)",
+          required: false,
+          channel_types: [ChannelType.GuildText],
+        },
+      ],
+    },
+    {
       name: "dm",
       description: "Send a direct message to a member as the server",
       default_member_permissions:
@@ -2487,6 +2533,8 @@ export async function handleInteraction(
       return handleSay(interaction);
     case "announce":
       return handleAnnounce(interaction);
+    case "partenariat":
+      return handlePartenariat(interaction);
     case "dm":
       return handleDm(interaction);
     case "channelstats":
@@ -4732,6 +4780,59 @@ async function handleAnnounce(
     });
   } catch {
     await interaction.reply({ content: "❌ Je n'ai pas la permission d'envoyer des messages ou de mentionner @everyone dans ce salon.", ephemeral: true });
+  }
+}
+
+async function handlePartenariat(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const partenaire = interaction.options.getString("partenaire", true);
+  const message = interaction.options.getString("message", true);
+  const lien = interaction.options.getString("lien");
+  const image = interaction.options.getString("image");
+  const logo = interaction.options.getString("logo");
+  const channelOption = interaction.options.getChannel("salon");
+  const target = (channelOption ?? interaction.channel) as TextChannel;
+
+  if (!target?.isTextBased()) {
+    await interaction.reply({ content: "❌ Salon introuvable.", ephemeral: true });
+    return;
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0xf1c40f)
+    .setTitle(`🤝 Partenariat — ${partenaire}`)
+    .setDescription(message.replaceAll("\\n", "\n"))
+    .setFooter({
+      text: `Partenariat présenté par ${interaction.user.displayName ?? interaction.user.username}`,
+      iconURL: interaction.user.displayAvatarURL({ size: 64 }),
+    })
+    .setTimestamp();
+
+  if (lien) embed.addFields({ name: "🔗 Lien", value: lien, inline: false });
+  if (logo) embed.setThumbnail(logo);
+  if (image) embed.setImage(image);
+
+  try {
+    await target.send({
+      content: "@everyone",
+      embeds: [embed],
+      allowedMentions: { parse: ["everyone"] },
+    });
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setDescription(`✅ Annonce partenariat publiée dans <#${target.id}>.`),
+      ],
+      ephemeral: true,
+    });
+  } catch {
+    await interaction.reply({
+      content: "❌ Je n'ai pas la permission d'envoyer des messages ou de mentionner @everyone dans ce salon.",
+      ephemeral: true,
+    });
   }
 }
 
