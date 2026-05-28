@@ -1,0 +1,60 @@
+{
+  "polls": {
+    "owwv9qfb": {
+      "id": "owwv9qfb",
+      "guildId": "1496898542424555562",
+      "channelId": "1508268770844475485",
+      "question": "je suis beau",
+      "options": [
+        "oui",
+        "non"
+      ],
+      "votes": {},
+      "createdAt": 1779671648304,
+      "creatorId": "1379011240545878022",
+      "ended": true
+    },
+    "926rburj": {
+      "id": "926rburj",
+      "guildId": "1496898542424555562",
+      "channelId": "1496901749418496042",
+      "question": "jss beau",
+      "options": [
+        "oui",
+        "nn"
+      ],
+      "votes": {
+        "1379011240545878022": 0
+      },
+      "createdAt": 1779680979976,
+      "creatorId": "1379011240545878022",
+      "ended": true,
+      "messageId": "1508316094757077173"
+    },
+    "xpblui0r": {
+      "id": "xpblui0r",
+      "guildId": "1496898542424555562",
+      "channelId": "1496902128621588490",
+      "question": "Que pensez vous de la famille ?",
+      "options": [
+        "en v2v ça va elle évolue bien",
+        "eteint",
+        "j’veux rejoindre mais jsuis timide",
+        "clc ton vote de merde"
+      ],
+      "votes": {
+        "1379011240545878022": 0,
+        "1109866281164865566": 0,
+        "1467630059627221063": 3,
+        "1187871316754309144": 3,
+        "1404839919876051016": 3,
+        "1382608305318269058": 3,
+        "1499733808742666362": 3
+      },
+      "createdAt": 1779701387432,
+      "creatorId": "1379011240545878022",
+      "ended": true,
+      "messageId": "1508401690007699456"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "1496898542424555562": {
+    "enabled": true,
+    "channelId": "1508543833388880042",
+    "logMessages": true,
+    "logVoice": false
+  },
+  "1456371910660063584": {
+    "enabled": false,
+    "channelId": null,
+    "logMessages": true,
+    "logVoice": true
+  }
+}

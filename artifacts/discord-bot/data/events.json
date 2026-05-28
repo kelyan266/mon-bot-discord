@@ -1,0 +1,34 @@
+{
+  "mpoey1vxsdey": {
+    "guildId": "1496898542424555562",
+    "channelId": "1496898543548366852",
+    "creatorId": "1379011240545878022",
+    "title": "test",
+    "description": "test",
+    "startTime": 1782594000000,
+    "maxParticipants": null,
+    "reminderMinutes": 15,
+    "id": "mpoey1vxsdey",
+    "participants": [
+      "1379011240545878022"
+    ],
+    "reminderSent": false,
+    "status": "cancelled"
+  },
+  "mpoez9r2cuso": {
+    "guildId": "1496898542424555562",
+    "channelId": "1496898543548366852",
+    "creatorId": "1379011240545878022",
+    "title": "tzst",
+    "description": "ftg sarah",
+    "startTime": 1779915600000,
+    "maxParticipants": null,
+    "reminderMinutes": 14,
+    "id": "mpoez9r2cuso",
+    "participants": [
+      "1379011240545878022"
+    ],
+    "reminderSent": true,
+    "status": "ended"
+  }
+}

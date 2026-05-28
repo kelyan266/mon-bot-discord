@@ -1,0 +1,21 @@
+{
+  "guilds": {
+    "1496898542424555562": {
+      "ticketCount": 13,
+      "openTickets": {
+        "1379011240545878022": "1508268770844475485",
+        "1358754214356062330": "1509286615435186428"
+      },
+      "categoryId": "1496898543548366851",
+      "logChannelId": "1507985192550268988",
+      "welcomeMessage": "Bonjour/Bonsoir {user} votre ticket sera pris en charge aussi vite que possible, on vous enverra le questionnaire écrit pour rejoindre {server} suite à ça vous aurez un entretient oral. Merci de votre compréhension !",
+      "supportRoleIds": [
+        "1496947909789225111",
+        "1496905234470146241",
+        "1496905342729060482",
+        "1504936222202662932",
+        "1507887860248871063"
+      ]
+    }
+  }
+}
