@@ -112,6 +112,64 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Warning"
+    post:
+      operationId: createWarning
+      tags: [bot]
+      summary: Add a warning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WarningInput"
+      responses:
+        "201":
+          description: Warning created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Warning"
+
+  /bot/warnings/{warningId}:
+    delete:
+      operationId: deleteWarning
+      tags: [bot]
+      summary: Delete a warning by id
+      parameters:
+        - name: warningId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /bot/resolve:
+    get:
+      operationId: resolveUsers
+      tags: [bot]
+      summary: Resolve Discord user IDs to profile info
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated list of Discord user IDs
+      responses:
+        "200":
+          description: User profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserProfile"
 
   /bot/polls:
     get:
@@ -283,3 +341,35 @@ components:
       required:
         - id
         - userCount
+
+    WarningInput:
+      type: object
+      properties:
+        guildId:
+          type: string
+        userId:
+          type: string
+        moderatorId:
+          type: string
+        reason:
+          type: string
+      required:
+        - guildId
+        - userId
+        - moderatorId
+        - reason
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+      required:
+        - id
+        - username

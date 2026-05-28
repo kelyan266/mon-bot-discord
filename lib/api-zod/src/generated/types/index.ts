@@ -17,4 +17,7 @@ export * from "./healthStatus";
 export * from "./leaderboardEntry";
 export * from "./poll";
 export * from "./pollVotes";
+export * from "./resolveUsersParams";
+export * from "./userProfile";
 export * from "./warning";
+export * from "./warningInput";

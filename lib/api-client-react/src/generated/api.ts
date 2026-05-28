@@ -5,10 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
@@ -24,11 +27,14 @@ import type {
   HealthStatus,
   LeaderboardEntry,
   Poll,
+  ResolveUsersParams,
+  UserProfile,
   Warning,
+  WarningInput,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -459,6 +465,270 @@ export function useGetWarnings<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetWarningsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a warning
+ */
+export const getCreateWarningUrl = () => {
+  return `/api/bot/warnings`;
+};
+
+export const createWarning = async (
+  warningInput: WarningInput,
+  options?: RequestInit,
+): Promise<Warning> => {
+  return customFetch<Warning>(getCreateWarningUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(warningInput),
+  });
+};
+
+export const getCreateWarningMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createWarning>>,
+    TError,
+    { data: BodyType<WarningInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createWarning>>,
+  TError,
+  { data: BodyType<WarningInput> },
+  TContext
+> => {
+  const mutationKey = ["createWarning"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createWarning>>,
+    { data: BodyType<WarningInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createWarning(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateWarningMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createWarning>>
+>;
+export type CreateWarningMutationBody = BodyType<WarningInput>;
+export type CreateWarningMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a warning
+ */
+export const useCreateWarning = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createWarning>>,
+    TError,
+    { data: BodyType<WarningInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createWarning>>,
+  TError,
+  { data: BodyType<WarningInput> },
+  TContext
+> => {
+  return useMutation(getCreateWarningMutationOptions(options));
+};
+
+/**
+ * @summary Delete a warning by id
+ */
+export const getDeleteWarningUrl = (warningId: string) => {
+  return `/api/bot/warnings/${warningId}`;
+};
+
+export const deleteWarning = async (
+  warningId: string,
+  options?: RequestInit,
+): Promise<HealthStatus> => {
+  return customFetch<HealthStatus>(getDeleteWarningUrl(warningId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteWarningMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteWarning>>,
+    TError,
+    { warningId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteWarning>>,
+  TError,
+  { warningId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteWarning"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteWarning>>,
+    { warningId: string }
+  > = (props) => {
+    const { warningId } = props ?? {};
+
+    return deleteWarning(warningId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteWarningMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteWarning>>
+>;
+
+export type DeleteWarningMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a warning by id
+ */
+export const useDeleteWarning = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteWarning>>,
+    TError,
+    { warningId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteWarning>>,
+  TError,
+  { warningId: string },
+  TContext
+> => {
+  return useMutation(getDeleteWarningMutationOptions(options));
+};
+
+/**
+ * @summary Resolve Discord user IDs to profile info
+ */
+export const getResolveUsersUrl = (params: ResolveUsersParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bot/resolve?${stringifiedParams}`
+    : `/api/bot/resolve`;
+};
+
+export const resolveUsers = async (
+  params: ResolveUsersParams,
+  options?: RequestInit,
+): Promise<UserProfile[]> => {
+  return customFetch<UserProfile[]>(getResolveUsersUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getResolveUsersQueryKey = (params?: ResolveUsersParams) => {
+  return [`/api/bot/resolve`, ...(params ? [params] : [])] as const;
+};
+
+export const getResolveUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof resolveUsers>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ResolveUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof resolveUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getResolveUsersQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof resolveUsers>>> = ({
+    signal,
+  }) => resolveUsers(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof resolveUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ResolveUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof resolveUsers>>
+>;
+export type ResolveUsersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Resolve Discord user IDs to profile info
+ */
+
+export function useResolveUsers<
+  TData = Awaited<ReturnType<typeof resolveUsers>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ResolveUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof resolveUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getResolveUsersQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

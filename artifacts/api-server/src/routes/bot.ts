@@ -1,7 +1,68 @@
 import { Router } from "express";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, writeFileSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
+
+const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN ?? "";
+
+interface CachedUser {
+  id: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  expiresAt: number;
+}
+const userCache = new Map<string, CachedUser>();
+
+async function resolveDiscordUser(userId: string): Promise<CachedUser> {
+  const cached = userCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached;
+
+  try {
+    const res = await fetch(`https://discord.com/api/v10/users/${userId}`, {
+      headers: { Authorization: `Bot ${BOT_TOKEN}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as {
+      id: string;
+      username: string;
+      global_name?: string | null;
+      avatar?: string | null;
+    };
+    const entry: CachedUser = {
+      id: data.id,
+      username: data.username,
+      displayName: data.global_name ?? null,
+      avatarUrl: data.avatar
+        ? `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.webp?size=64`
+        : null,
+      expiresAt: Date.now() + 60 * 60 * 1000,
+    };
+    userCache.set(userId, entry);
+    return entry;
+  } catch {
+    const fallback: CachedUser = {
+      id: userId,
+      username: userId,
+      displayName: null,
+      avatarUrl: null,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    };
+    userCache.set(userId, fallback);
+    return fallback;
+  }
+}
+
+function writeJson(file: string, data: unknown) {
+  writeFileSync(join(DATA_DIR, file), JSON.stringify(data, null, 2), "utf-8");
+}
+
+function nanoid(len = 12) {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  return Array.from({ length: len }, () =>
+    chars[Math.floor(Math.random() * chars.length)],
+  ).join("");
+}
 
 const DATA_DIR = join(
   fileURLToPath(new URL("../../discord-bot/data", import.meta.url)),
@@ -185,6 +246,61 @@ router.get("/bot/warnings", (req, res) => {
     .sort((a, b) => b.timestamp - a.timestamp);
 
   res.json(filtered);
+});
+
+router.post("/bot/warnings", (req, res) => {
+  const { guildId, userId, moderatorId, reason } = req.body as {
+    guildId: string;
+    userId: string;
+    moderatorId: string;
+    reason: string;
+  };
+  if (!guildId || !userId || !moderatorId || !reason) {
+    res.status(400).json({ error: "guildId, userId, moderatorId, reason are required" });
+    return;
+  }
+  const data = readJson<WarningsData>("warnings.json", { warnings: [] });
+  const entry: WarningEntry = {
+    id: `${nanoid(8)}-${nanoid(6)}`,
+    guildId,
+    userId,
+    moderatorId,
+    reason,
+    timestamp: Date.now(),
+  };
+  data.warnings.push(entry);
+  writeJson("warnings.json", data);
+  res.status(201).json(entry);
+});
+
+router.delete("/bot/warnings/:warningId", (req, res) => {
+  const { warningId } = req.params;
+  const data = readJson<WarningsData>("warnings.json", { warnings: [] });
+  const before = data.warnings.length;
+  data.warnings = data.warnings.filter((w) => w.id !== warningId);
+  if (data.warnings.length === before) {
+    res.status(404).json({ error: "Warning not found" });
+    return;
+  }
+  writeJson("warnings.json", data);
+  res.json({ status: "ok" });
+});
+
+router.get("/bot/resolve", async (req, res) => {
+  const raw = (req.query["ids"] as string) ?? "";
+  const ids = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 50);
+
+  if (ids.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const results = await Promise.all(ids.map(resolveDiscordUser));
+  res.json(results);
 });
 
 router.get("/bot/polls", (req, res) => {

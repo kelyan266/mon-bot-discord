@@ -78,6 +78,42 @@ export const GetWarningsResponseItem = zod.object({
 export const GetWarningsResponse = zod.array(GetWarningsResponseItem);
 
 /**
+ * @summary Add a warning
+ */
+export const CreateWarningBody = zod.object({
+  guildId: zod.string(),
+  userId: zod.string(),
+  moderatorId: zod.string(),
+  reason: zod.string(),
+});
+
+/**
+ * @summary Delete a warning by id
+ */
+export const DeleteWarningParams = zod.object({
+  warningId: zod.coerce.string(),
+});
+
+export const DeleteWarningResponse = zod.object({
+  status: zod.string(),
+});
+
+/**
+ * @summary Resolve Discord user IDs to profile info
+ */
+export const ResolveUsersQueryParams = zod.object({
+  ids: zod.coerce.string().describe("Comma-separated list of Discord user IDs"),
+});
+
+export const ResolveUsersResponseItem = zod.object({
+  id: zod.string(),
+  username: zod.string(),
+  displayName: zod.string().nullish(),
+  avatarUrl: zod.string().nullish(),
+});
+export const ResolveUsersResponse = zod.array(ResolveUsersResponseItem);
+
+/**
  * @summary Polls for a guild
  */
 export const GetPollsQueryParams = zod.object({

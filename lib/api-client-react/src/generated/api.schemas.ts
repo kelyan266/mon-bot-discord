@@ -62,6 +62,22 @@ export interface Guild {
   userCount: number;
 }
 
+export interface WarningInput {
+  guildId: string;
+  userId: string;
+  moderatorId: string;
+  reason: string;
+}
+
+export interface UserProfile {
+  id: string;
+  username: string;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+}
+
 export type GetLeaderboardParams = {
   guildId: string;
   limit?: number;
@@ -74,6 +90,13 @@ export type GetEconomyParams = {
 
 export type GetWarningsParams = {
   guildId: string;
+};
+
+export type ResolveUsersParams = {
+  /**
+   * Comma-separated list of Discord user IDs
+   */
+  ids: string;
 };
 
 export type GetPollsParams = {
