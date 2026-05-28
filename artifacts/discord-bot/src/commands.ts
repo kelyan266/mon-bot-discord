@@ -147,6 +147,14 @@ import {
   setXpEnabled,
 } from "./settings.js";
 import {
+  cleanupTempVC as _cleanupTempVC,
+  getOwnerTempVC,
+  getTempVCEntry,
+  isTempVC,
+  registerTempVC,
+  setTempVCLocked,
+} from "./tempvc.js";
+import {
   divorce as marriageDivorce,
   getPartner,
   isMarried,
@@ -805,6 +813,56 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       name: "divorce",
       description: "💔 Divorcer de ton partenaire actuel",
       dm_permission: false,
+    },
+    {
+      name: "voice",
+      description: "Gérer ton salon vocal actuel",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "lock",
+          description: "Verrouiller le salon vocal (personne ne peut rejoindre)",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "unlock",
+          description: "Déverrouiller le salon vocal",
+        },
+      ],
+    },
+    {
+      name: "tempvc",
+      description: "Créer et gérer un salon vocal temporaire",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "create",
+          description: "Créer un salon vocal temporaire (supprimé automatiquement quand vide)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "nom",
+              description: "Nom du salon (défaut : ton pseudo)",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "rename",
+          description: "Renommer ton salon vocal temporaire",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "nom",
+              description: "Nouveau nom",
+              required: true,
+            },
+          ],
+        },
+      ],
     },
     {
       name: "permissions",
@@ -2409,6 +2467,10 @@ export async function handleInteraction(
       return handleMarry(interaction);
     case "divorce":
       return handleDivorce(interaction);
+    case "voice":
+      return handleVoiceCmd(interaction);
+    case "tempvc":
+      return handleTempVC(interaction);
     default:
       await reply(
         interaction,
@@ -6598,6 +6660,156 @@ async function handleDivorce(
         .setTimestamp(),
     ],
   });
+}
+
+async function handleVoiceCmd(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const sub = interaction.options.getSubcommand();
+  const member = interaction.member as GuildMember;
+  const guild = interaction.guild!;
+
+  const vc = member.voice.channel;
+  if (!vc || vc.type !== ChannelType.GuildVoice) {
+    await interaction.reply({
+      content: "❌ Tu dois être dans un salon vocal pour utiliser cette commande.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const entry = getTempVCEntry(vc.id);
+  const isOwner = entry?.ownerId === member.id;
+  const hasPerms = (member as GuildMember).permissions.has(PermissionFlagsBits.ManageChannels);
+
+  if (!isOwner && !hasPerms) {
+    await interaction.reply({
+      content: "❌ Tu dois être le créateur du salon ou avoir **Gérer les salons** pour faire ça.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const me = guild.members.me;
+  if (!me?.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    await interaction.reply({ content: "❌ Je n'ai pas la permission de gérer ce salon.", ephemeral: true });
+    return;
+  }
+
+  const locking = sub === "lock";
+
+  await vc.permissionOverwrites.edit(
+    guild.roles.everyone,
+    { Connect: locking ? false : null },
+    { reason: `${member.user.tag}: ${locking ? "Verrouillage" : "Déverrouillage"} vocal` },
+  );
+
+  if (entry) setTempVCLocked(vc.id, locking);
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(locking ? 0xed4245 : 0x57f287)
+        .setTitle(locking ? "🔒 Salon vocal verrouillé" : "🔓 Salon vocal déverrouillé")
+        .setDescription(
+          locking
+            ? `Personne ne peut rejoindre **${vc.name}** tant qu'il est verrouillé.`
+            : `**${vc.name}** est de nouveau accessible à tous.`,
+        )
+        .setTimestamp(),
+    ],
+  });
+}
+
+async function handleTempVC(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const sub = interaction.options.getSubcommand();
+  const member = interaction.member as GuildMember;
+  const guild = interaction.guild!;
+
+  if (sub === "create") {
+    const existing = getOwnerTempVC(guild.id, member.id);
+    if (existing) {
+      await interaction.reply({
+        content: `❌ Tu as déjà un salon temporaire : <#${existing}>. Quitte-le d'abord pour en créer un nouveau.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const name = interaction.options.getString("nom") ?? `🎙️ ${member.displayName}`;
+
+    const me = guild.members.me;
+    if (!me?.permissions.has(PermissionFlagsBits.ManageChannels)) {
+      await interaction.reply({ content: "❌ Je n'ai pas la permission de créer des salons.", ephemeral: true });
+      return;
+    }
+
+    const category = member.voice.channel?.parent ?? null;
+
+    await interaction.deferReply({ ephemeral: true });
+
+    const channel = await guild.channels.create({
+      name,
+      type: ChannelType.GuildVoice,
+      parent: category,
+      userLimit: 0,
+      reason: `TempVC créé par ${member.user.tag}`,
+    });
+
+    registerTempVC(channel.id, guild.id, member.id);
+
+    await member.voice.setChannel(channel).catch(() => null);
+
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setTitle("🎙️ Salon temporaire créé !")
+          .setDescription(
+            `**${channel.name}** est prêt.\n\n` +
+            `• Utilise \`/voice lock\` pour le verrouiller\n` +
+            `• Utilise \`/tempvc rename <nom>\` pour le renommer\n` +
+            `• Il sera **supprimé automatiquement** quand tout le monde partira`,
+          )
+          .setTimestamp(),
+      ],
+    });
+    return;
+  }
+
+  if (sub === "rename") {
+    const ownedChannelId = getOwnerTempVC(guild.id, member.id);
+    if (!ownedChannelId) {
+      await interaction.reply({
+        content: "❌ Tu n'as pas de salon temporaire actif. Crées-en un avec `/tempvc create`.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const channel = guild.channels.cache.get(ownedChannelId);
+    if (!channel) {
+      await interaction.reply({ content: "❌ Salon introuvable.", ephemeral: true });
+      return;
+    }
+
+    const newName = interaction.options.getString("nom", true).slice(0, 100);
+    const oldName = channel.name;
+    await channel.setName(newName, `Renommé par ${member.user.tag}`);
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_PRIMARY)
+          .setTitle("✏️ Salon renommé")
+          .setDescription(`**${oldName}** → **${newName}**`)
+          .setTimestamp(),
+      ],
+      ephemeral: true,
+    });
+  }
 }
 
 export async function handleMarryButton(

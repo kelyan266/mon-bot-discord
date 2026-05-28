@@ -21,6 +21,7 @@ import {
   HELP_SELECT_ID,
 } from "./commands.js";
 import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
+import { cleanupTempVC, isTempVC } from "./tempvc.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
@@ -566,6 +567,15 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   void handleVoiceLog(oldState, newState, client).catch((err) =>
     console.error("Log voice failed:", err),
   );
+
+  // Auto-delete temp VC when it becomes empty
+  if (oldState.channelId && oldState.channelId !== newState.channelId) {
+    if (isTempVC(oldState.channelId) && oldState.guild) {
+      void cleanupTempVC(oldState.guild, oldState.channelId).catch((err) =>
+        console.error("TempVC cleanup failed:", err),
+      );
+    }
+  }
 });
 
 setInterval(() => {
