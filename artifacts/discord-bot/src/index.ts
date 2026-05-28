@@ -135,8 +135,18 @@ client.once(Events.ClientReady, async (c) => {
 client.on(Events.GuildCreate, () => updatePresence());
 client.on(Events.GuildDelete, () => updatePresence());
 
+const recentWelcomes = new Map<string, number>();
+const WELCOME_DEDUP_MS = 10_000;
+
 client.on(Events.GuildMemberAdd, async (member) => {
   if (!member.guild) return;
+
+  const key = `${member.guild.id}:${member.id}`;
+  const now = Date.now();
+  if (recentWelcomes.has(key) && now - recentWelcomes.get(key)! < WELCOME_DEDUP_MS) return;
+  recentWelcomes.set(key, now);
+  setTimeout(() => recentWelcomes.delete(key), WELCOME_DEDUP_MS);
+
   try {
     const config = await getWelcomeConfig(member.guild.id);
     if (!config) return;
