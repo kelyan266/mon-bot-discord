@@ -8,6 +8,7 @@ import {
   BarChart3,
   Bot,
   X,
+  Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Coins,
   ShieldAlert,
   BarChart3,
+  Terminal,
 };
 
 interface SidebarProps {

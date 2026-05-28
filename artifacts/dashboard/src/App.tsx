@@ -12,6 +12,7 @@ import Leaderboard from "@/pages/Leaderboard";
 import Economy from "@/pages/Economy";
 import Moderation from "@/pages/Moderation";
 import Polls from "@/pages/Polls";
+import Commands from "@/pages/Commands";
 import { NAV_ITEMS } from "@/lib/constants";
 
 const queryClient = new QueryClient({
@@ -29,6 +30,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/economy": "Économie",
   "/moderation": "Modération",
   "/polls": "Sondages",
+  "/commands": "Commandes",
 };
 
 function DashboardShell() {
@@ -50,6 +52,7 @@ function DashboardShell() {
             <Route path="/economy" component={Economy} />
             <Route path="/moderation" component={Moderation} />
             <Route path="/polls" component={Polls} />
+            <Route path="/commands" component={Commands} />
             <Route component={NotFound} />
           </Switch>
         </main>
