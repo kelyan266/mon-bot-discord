@@ -3950,6 +3950,16 @@ async function handleTicket(
             inline: false,
           },
           {
+            name: `🎟️ Tickets actifs (${open})`,
+            value: open > 0
+              ? Object.entries(config.openTickets)
+                  .slice(0, 20)
+                  .map(([userId, channelId]) => `<@${userId}> → <#${channelId}>`)
+                  .join("\n") + (open > 20 ? `\n*… et ${open - 20} autres*` : "")
+              : "Aucun ticket ouvert actuellement.",
+            inline: false,
+          },
+          {
             name: `🗂️ Types de tickets (${config.categories.length}/25)`,
             value: categoriesValue,
             inline: false,
