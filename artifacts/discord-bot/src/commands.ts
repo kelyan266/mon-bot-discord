@@ -1384,6 +1384,22 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "renamebot",
+      description: "Changer le nom d'affichage du bot sur ce serveur",
+      default_member_permissions:
+        PermissionFlagsBits.Administrator.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "nom",
+          description: "Nouveau nom du bot (max 32 caractères)",
+          required: true,
+          max_length: 32,
+        },
+      ],
+    },
+    {
       name: "levels",
       description: "Enable or disable the XP/levels system on this server",
       default_member_permissions:
@@ -2555,6 +2571,8 @@ export async function handleInteraction(
       return handleLevelsToggle(interaction);
     case "setavatar":
       return handleSetAvatar(interaction);
+    case "renamebot":
+      return handleRenameBot(interaction);
     case "resetroles":
       return handleResetRoles(interaction);
     case "botrole":
@@ -7434,4 +7452,58 @@ async function handleSlowmode(
           : `Slowmode set to ${seconds} second(s) per message.`,
       ),
   );
+}
+
+async function handleRenameBot(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const nom = interaction.options.getString("nom", true).trim();
+
+  if (nom.length < 2) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setTitle("⚠️ Nom trop court")
+        .setDescription("Le nom doit contenir au moins 2 caractères."),
+      true,
+    );
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    const guild = interaction.guild!;
+    const me = guild.members.me;
+
+    await me?.setNickname(nom, `Renommé par ${interaction.user.tag}`);
+
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Bot renommé")
+          .setDescription(
+            `Le bot s'appelle maintenant **${nom}** sur ce serveur.\n⚠️ Le nom global du bot reste inchangé sur les autres serveurs.`,
+          )
+          .setThumbnail(
+            me?.displayAvatarURL() ??
+              interaction.client.user.displayAvatarURL(),
+          ),
+      ],
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erreur inconnue";
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("❌ Échec du renommage")
+          .setDescription(
+            `Impossible de renommer le bot.\n\`${msg}\`\n\nVérifie que le bot a la permission de changer son pseudo sur ce serveur.`,
+          ),
+      ],
+    });
+  }
 }
