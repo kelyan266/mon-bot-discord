@@ -135,6 +135,7 @@ import {
   removeTicket,
   removeTicketCategory,
   removeTicketSupportRole,
+  resetTicketConfig,
   saveTicketConfig,
 } from "./tickets.js";
 import {
@@ -1712,6 +1713,19 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
           type: ApplicationCommandOptionType.Subcommand,
           name: "autologs",
           description: "Créer automatiquement les salons de logs pour les tickets",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "resetconfig",
+          description: "Réinitialiser toute la configuration des tickets (catégories, rôles, logs…)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Boolean,
+              name: "confirmer",
+              description: "Mettre à true pour confirmer la réinitialisation",
+              required: true,
+            },
+          ],
         },
       ],
     },
@@ -4241,6 +4255,38 @@ async function handleTicket(
     }
     return;
   }
+
+  if (sub === "resetconfig") {
+    const confirmed = interaction.options.getBoolean("confirmer", true);
+    if (!confirmed) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setTitle("⚠️ Réinitialisation annulée")
+          .setDescription("Mets `confirmer` à **true** pour valider la réinitialisation."),
+        true,
+      );
+      return;
+    }
+    await resetTicketConfig(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Configuration réinitialisée")
+        .setDescription(
+          "Toute la configuration des tickets a été effacée :\n" +
+          "• Catégories de tickets supprimées\n" +
+          "• Rôles support retirés\n" +
+          "• Catégorie Discord et salon de log retirés\n" +
+          "• Message de bienvenue réinitialisé\n\n" +
+          "Les tickets actuellement ouverts et le compteur total sont conservés.",
+        ),
+      true,
+    );
+    return;
+  }
 }
 
 async function handleResetRoles(
@@ -6170,6 +6216,7 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/ticket setwelcome [message]", value: "Message de bienvenue personnalisé (variables : {user} {username} {ticket_count} {server})", inline: false },
           { name: "/ticket rename <name>", value: "Renommer le salon du ticket actuel", inline: false },
           { name: "/ticket config", value: "Voir la configuration actuelle du système de tickets", inline: false },
+          { name: "/ticket resetconfig confirmer:true", value: "Réinitialiser toute la configuration (catégories, rôles, logs…)", inline: false },
         )
         .setTimestamp(),
   },

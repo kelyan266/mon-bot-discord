@@ -182,6 +182,17 @@ export async function removeTicketCategory(
   return true;
 }
 
+export async function resetTicketConfig(guildId: string): Promise<void> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  guild.supportRoleIds = [];
+  guild.categories = [];
+  delete guild.categoryId;
+  delete guild.logChannelId;
+  delete guild.welcomeMessage;
+  await persist();
+}
+
 export async function getOpenTicket(
   guildId: string,
   userId: string,

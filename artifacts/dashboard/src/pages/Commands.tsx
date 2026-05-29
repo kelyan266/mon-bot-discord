@@ -541,6 +541,16 @@ const CATEGORIES: Category[] = [
         description: "Voir la configuration actuelle du système de tickets.",
         permissions: "Gérer les salons",
       },
+      {
+        name: "/ticket resetconfig",
+        usage: "/ticket resetconfig confirmer:true",
+        description: "Réinitialiser toute la configuration des tickets.",
+        details: "Efface les catégories, rôles support, catégorie Discord, salon de log et message de bienvenue. Les tickets ouverts et le compteur total sont conservés.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "confirmer", description: "Mettre à true pour valider (protection anti-accident)", required: true },
+        ],
+      },
     ],
   },
   {
