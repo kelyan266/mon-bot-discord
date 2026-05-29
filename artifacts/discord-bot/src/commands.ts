@@ -1384,6 +1384,27 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "setbanner",
+      description: "Changer la bannière globale du bot",
+      default_member_permissions:
+        PermissionFlagsBits.Administrator.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Attachment,
+          name: "image",
+          description: "Image de bannière (PNG, JPG, GIF, WEBP — ratio 16:9 recommandé)",
+          required: false,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "url",
+          description: "URL publique de l'image de bannière",
+          required: false,
+        },
+      ],
+    },
+    {
       name: "renamebot",
       description: "Changer le nom d'affichage du bot sur ce serveur",
       default_member_permissions:
@@ -2571,6 +2592,8 @@ export async function handleInteraction(
       return handleLevelsToggle(interaction);
     case "setavatar":
       return handleSetAvatar(interaction);
+    case "setbanner":
+      return handleSetBanner(interaction);
     case "renamebot":
       return handleRenameBot(interaction);
     case "resetroles":
@@ -7502,6 +7525,80 @@ async function handleRenameBot(
           .setTitle("❌ Échec du renommage")
           .setDescription(
             `Impossible de renommer le bot.\n\`${msg}\`\n\nVérifie que le bot a la permission de changer son pseudo sur ce serveur.`,
+          ),
+      ],
+    });
+  }
+}
+
+async function handleSetBanner(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const attachment = interaction.options.getAttachment("image");
+  const urlOption = interaction.options.getString("url");
+
+  if (!attachment && !urlOption) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setTitle("⚠️ Paramètre manquant")
+        .setDescription(
+          "Fournis une pièce jointe (`image`) ou une URL (`url`).",
+        ),
+      true,
+    );
+    return;
+  }
+
+  const imageUrl = attachment?.url ?? urlOption!;
+  const ALLOWED = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+  if (attachment && !ALLOWED.includes(attachment.contentType ?? "")) {
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setTitle("⚠️ Format non supporté")
+        .setDescription("Utilise un fichier PNG, JPG, GIF ou WEBP."),
+      true,
+    );
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    const res = await fetch(imageUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const contentType = res.headers.get("content-type") ?? "image/png";
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const mime = contentType.split(";")[0]!.trim();
+    const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
+
+    await interaction.client.rest.patch("/users/@me", {
+      body: { banner: dataUrl },
+    });
+
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Bannière mise à jour")
+          .setDescription(
+            `La bannière du bot a été changée **globalement** (visible sur tous les serveurs).\n⚠️ Discord peut limiter la fréquence des changements.`,
+          )
+          .setImage(imageUrl),
+      ],
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erreur inconnue";
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("❌ Échec du changement")
+          .setDescription(
+            `Impossible de mettre à jour la bannière.\n\`${msg}\``,
           ),
       ],
     });
