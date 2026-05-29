@@ -3913,6 +3913,14 @@ async function handleTicket(
   if (sub === "config") {
     const config = await getTicketConfig(guild.id);
     const open = Object.keys(config.openTickets).length;
+
+    const categoriesValue = config.categories.length > 0
+      ? config.categories.map((c, i) => {
+          const role = c.mentionRoleId ? ` → <@&${c.mentionRoleId}>` : "";
+          return `**${i + 1}.** ${c.emoji} **${c.label}** — \`id: ${c.id}\`${role}\n┗ *${c.description}*`;
+        }).join("\n")
+      : "Aucune catégorie — panel avec bouton simple.\nUtilise `/ticket addcategory` pour créer un menu déroulant.";
+
     await reply(
       interaction,
       new EmbedBuilder()
@@ -3920,43 +3928,41 @@ async function handleTicket(
         .setTitle("🎫 Configuration des tickets")
         .addFields(
           {
-            name: `Rôles support (${config.supportRoleIds.length})`,
+            name: "📂 Catégorie Discord",
+            value: config.categoryId ? `<#${config.categoryId}>` : "Non configurée",
+            inline: true,
+          },
+          {
+            name: "📋 Salon de log",
+            value: config.logChannelId ? `<#${config.logChannelId}>` : "Non configuré",
+            inline: true,
+          },
+          {
+            name: "🛡️ Rôles support",
             value: config.supportRoleIds.length > 0
               ? config.supportRoleIds.map((id) => `<@&${id}>`).join(", ")
               : "Non configuré",
             inline: true,
           },
           {
-            name: "Catégorie",
-            value: config.categoryId
-              ? `<#${config.categoryId}>`
-              : "Non configurée",
-            inline: true,
+            name: "📊 Statistiques",
+            value: `Ouverts : **${open}** · Total créés : **${config.ticketCount}**`,
+            inline: false,
           },
           {
-            name: "Salon de log",
-            value: config.logChannelId
-              ? `<#${config.logChannelId}>`
-              : "Non configuré",
-            inline: true,
+            name: `🗂️ Types de tickets (${config.categories.length}/25)`,
+            value: categoriesValue,
+            inline: false,
           },
           {
-            name: "Tickets ouverts",
-            value: `**${open}**`,
-            inline: true,
-          },
-          {
-            name: "Total créés",
-            value: `**${config.ticketCount}**`,
-            inline: true,
-          },
-          {
-            name: "Message de bienvenue",
+            name: "💬 Message de bienvenue",
             value: config.welcomeMessage
-              ? `\`\`\`${config.welcomeMessage}\`\`\``
+              ? `\`\`\`${config.welcomeMessage.slice(0, 900)}\`\`\``
               : "Par défaut",
+            inline: false,
           },
-        ),
+        )
+        .setFooter({ text: "Pour modifier un type : /ticket editcategory id:<id> · Pour ajouter : /ticket addcategory" }),
       true,
     );
     return;
