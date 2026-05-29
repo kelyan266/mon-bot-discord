@@ -61,7 +61,6 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-DISCORD_GUILD_ID = "1496898542424555562"
 
 [userenv.development]
 DISABLE_BOT = "false"
