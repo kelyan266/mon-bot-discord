@@ -439,15 +439,16 @@ const CATEGORIES: Category[] = [
       },
       {
         name: "/ticket addcategory",
-        usage: "/ticket addcategory <id> <label> <emoji> <description>",
+        usage: "/ticket addcategory <id> <label> <emoji> <description> [role]",
         description: "Ajouter un type de ticket dans le menu déroulant du panel.",
-        details: "Ex : id=owner label=Ticket Owner emoji=👑 description=Contacter le staff owner. Le panel affichera un menu avec tous les types configurés.",
+        details: "Ex : id=owner label=Ticket Owner emoji=👑 description=Contacter le staff owner role=@Owner. Si un rôle est défini, seul ce rôle est mentionné à l'ouverture de ce type de ticket (au lieu des rôles support généraux).",
         permissions: "Gérer les salons",
         options: [
           { name: "id", description: "Identifiant unique sans espaces (ex: owner)", required: true },
           { name: "label", description: "Nom affiché dans le menu (ex: Ticket Owner)", required: true },
           { name: "emoji", description: "Emoji affiché (ex: 👑)", required: true },
           { name: "description", description: "Description courte dans le menu", required: true },
+          { name: "role", description: "Rôle mentionné à l'ouverture de ce type de ticket", required: false },
         ],
       },
       {

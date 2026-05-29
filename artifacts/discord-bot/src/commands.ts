@@ -1638,6 +1638,12 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
               required: true,
               max_length: 100,
             },
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Rôle mentionné à l'ouverture de ce type de ticket (optionnel)",
+              required: false,
+            },
           ],
         },
         {
@@ -4015,8 +4021,15 @@ async function handleTicket(
     const label = interaction.options.getString("label", true);
     const emoji = interaction.options.getString("emoji", true);
     const description = interaction.options.getString("description", true);
+    const mentionRole = interaction.options.getRole("role");
 
-    const added = await addTicketCategory(guild.id, { id, label, emoji, description });
+    const added = await addTicketCategory(guild.id, {
+      id,
+      label,
+      emoji,
+      description,
+      mentionRoleId: mentionRole?.id,
+    });
     const config = await getTicketConfig(guild.id);
 
     await reply(
@@ -4026,14 +4039,14 @@ async function handleTicket(
         .setTitle(added ? "✅ Catégorie ajoutée" : "⚠️ ID déjà utilisé ou limite atteinte")
         .setDescription(
           added
-            ? `${emoji} **${label}** ajouté au panel.\nReposte le panel avec \`/ticket panel\` pour l'afficher.`
+            ? `${emoji} **${label}** ajouté au panel.${mentionRole ? `\nRôle mentionné : <@&${mentionRole.id}>` : ""}\nReposte le panel avec \`/ticket panel\` pour l'afficher.`
             : "Cet ID existe déjà ou tu as atteint la limite de 25 catégories.",
         )
         .addFields({
           name: `Catégories (${config.categories.length})`,
           value:
             config.categories
-              .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)`)
+              .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)${c.mentionRoleId ? ` → <@&${c.mentionRoleId}>` : ""}`)
               .join("\n") || "Aucune",
         }),
       true,
@@ -6015,7 +6028,7 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/ticket setup [category] [log]", value: "Configurer la catégorie et le salon de log", inline: false },
           { name: "/ticket autologs", value: "Créer automatiquement les salons de logs 📋", inline: false },
           { name: "/ticket panel [description]", value: "Poster le panel (bouton ou menu déroulant)", inline: false },
-          { name: "/ticket addcategory <id> <label> <emoji> <description>", value: "Ajouter un type de ticket dans le menu déroulant", inline: false },
+          { name: "/ticket addcategory <id> <label> <emoji> <description> [role]", value: "Ajouter un type de ticket — `role` = rôle mentionné à l'ouverture", inline: false },
           { name: "/ticket removecategory <id>", value: "Supprimer un type de ticket du menu déroulant", inline: false },
           { name: "/ticket close [raison]", value: "Fermer le ticket actuel (et l'archiver)", inline: false },
           { name: "/ticket add <user>", value: "Ajouter un membre au ticket ouvert", inline: false },

@@ -27,6 +27,7 @@ export interface TicketCategory {
   label: string;
   emoji: string;
   description: string;
+  mentionRoleId?: string;
 }
 
 export interface TicketGuildConfig {
@@ -440,7 +441,11 @@ export async function handleTicketOpen(
     .setFooter({ text: `Ouvert par ${member.user.tag}` })
     .setTimestamp();
 
-  const ping = config.supportRoleIds.map((id) => `<@&${id}>`).join(" ");
+  const pingRoleIds =
+    category?.mentionRoleId
+      ? [category.mentionRoleId]
+      : config.supportRoleIds;
+  const ping = pingRoleIds.map((id) => `<@&${id}>`).join(" ");
 
   await (channel as TextChannel).send({
     content: ping || undefined,
