@@ -89,25 +89,27 @@ const client = new Client({
 async function syncCommands(applicationId: string): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(token!);
   try {
-    // Register globally (covers future guilds)
-    await rest.put(Routes.applicationCommands(applicationId), {
-      body: commandDefinitions,
-    });
-    console.log(`Synced ${commandDefinitions.length} global commands.`);
-
-    // Also register per-guild for instant propagation on all current servers
+    // Clear any stale guild-specific commands to avoid duplicates
     const guilds = client.guilds.cache;
     await Promise.all(
       guilds.map((guild) =>
         rest
           .put(Routes.applicationGuildCommands(applicationId, guild.id), {
-            body: commandDefinitions,
+            body: [],
           })
-          .then(() => console.log(`Synced commands for guild ${guild.name} (${guild.id}) — instant.`))
-          .catch((err) => console.error(`Failed to sync commands for guild ${guild.id}:`, err)),
+          .catch((err) =>
+            console.error(`Failed to clear guild commands for ${guild.id}:`, err),
+          ),
       ),
     );
-    console.log(`Guild-level sync done for ${guilds.size} server(s).`);
+
+    // Register globally (single source of truth, no duplicates)
+    await rest.put(Routes.applicationCommands(applicationId), {
+      body: commandDefinitions,
+    });
+    console.log(
+      `Synced ${commandDefinitions.length} global commands. Guild-specific commands cleared.`,
+    );
   } catch (err) {
     console.error("Failed to sync slash commands:", err);
   }
