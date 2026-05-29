@@ -147,6 +147,28 @@ export async function addTicketCategory(
   return true;
 }
 
+export async function editTicketCategory(
+  guildId: string,
+  catId: string,
+  patch: Partial<Omit<TicketCategory, "id">>,
+  clearRole?: boolean,
+): Promise<TicketCategory | null> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  const cat = guild.categories.find((c) => c.id === catId);
+  if (!cat) return null;
+  if (patch.label !== undefined) cat.label = patch.label;
+  if (patch.emoji !== undefined) cat.emoji = patch.emoji;
+  if (patch.description !== undefined) cat.description = patch.description;
+  if (clearRole) {
+    delete cat.mentionRoleId;
+  } else if (patch.mentionRoleId !== undefined) {
+    cat.mentionRoleId = patch.mentionRoleId;
+  }
+  await persist();
+  return { ...cat };
+}
+
 export async function removeTicketCategory(
   guildId: string,
   catId: string,

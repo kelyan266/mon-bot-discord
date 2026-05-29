@@ -129,6 +129,7 @@ import {
   addTicketSupportRole,
   autoCreateLogChannel,
   buildPanel,
+  editTicketCategory,
   getTicketConfig,
   handleTicketClose,
   removeTicket,
@@ -1642,6 +1643,53 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
               type: ApplicationCommandOptionType.Role,
               name: "role",
               description: "Rôle mentionné à l'ouverture de ce type de ticket (optionnel)",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "editcategory",
+          description: "Modifier un type de ticket existant (label, emoji, description, rôle…)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "Identifiant du type à modifier (ex: owner, abus)",
+              required: true,
+              max_length: 20,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "label",
+              description: "Nouveau nom affiché dans le menu",
+              required: false,
+              max_length: 50,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "emoji",
+              description: "Nouvel emoji",
+              required: false,
+              max_length: 10,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "description",
+              description: "Nouvelle description courte",
+              required: false,
+              max_length: 100,
+            },
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Nouveau rôle mentionné à l'ouverture",
+              required: false,
+            },
+            {
+              type: ApplicationCommandOptionType.Boolean,
+              name: "clearrole",
+              description: "Supprimer le rôle mentionné (mettre à true pour retirer)",
               required: false,
             },
           ],
@@ -4054,6 +4102,73 @@ async function handleTicket(
     return;
   }
 
+  if (sub === "editcategory") {
+    const id = interaction.options.getString("id", true).toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 20);
+    const label = interaction.options.getString("label") ?? undefined;
+    const emoji = interaction.options.getString("emoji") ?? undefined;
+    const description = interaction.options.getString("description") ?? undefined;
+    const mentionRole = interaction.options.getRole("role");
+    const clearRole = interaction.options.getBoolean("clearrole") ?? false;
+
+    if (!label && !emoji && !description && !mentionRole && !clearRole) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setTitle("⚠️ Aucune modification fournie")
+          .setDescription("Indique au moins un champ à modifier : `label`, `emoji`, `description`, `role` ou `clearrole`."),
+        true,
+      );
+      return;
+    }
+
+    const updated = await editTicketCategory(
+      guild.id,
+      id,
+      {
+        label,
+        emoji,
+        description,
+        mentionRoleId: mentionRole?.id,
+      },
+      clearRole,
+    );
+
+    if (!updated) {
+      await reply(
+        interaction,
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setTitle("⚠️ Catégorie introuvable")
+          .setDescription(`Aucune catégorie avec l'ID \`${id}\`.`),
+        true,
+      );
+      return;
+    }
+
+    const config = await getTicketConfig(guild.id);
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Catégorie modifiée")
+        .setDescription(
+          `${updated.emoji} **${updated.label}** (\`${updated.id}\`) mis à jour.` +
+          (updated.mentionRoleId ? `\nRôle mentionné : <@&${updated.mentionRoleId}>` : "\nAucun rôle mentionné.") +
+          `\nReposte le panel avec \`/ticket panel\` si tu veux mettre à jour l'affichage.`,
+        )
+        .addFields({
+          name: `Toutes les catégories (${config.categories.length})`,
+          value:
+            config.categories
+              .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)${c.mentionRoleId ? ` → <@&${c.mentionRoleId}>` : ""}`)
+              .join("\n") || "Aucune",
+        }),
+      true,
+    );
+    return;
+  }
+
   if (sub === "removecategory") {
     const id = interaction.options.getString("id", true).toLowerCase();
     const removed = await removeTicketCategory(guild.id, id);
@@ -6029,6 +6144,7 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/ticket autologs", value: "Créer automatiquement les salons de logs 📋", inline: false },
           { name: "/ticket panel [description]", value: "Poster le panel (bouton ou menu déroulant)", inline: false },
           { name: "/ticket addcategory <id> <label> <emoji> <description> [role]", value: "Ajouter un type de ticket — `role` = rôle mentionné à l'ouverture", inline: false },
+          { name: "/ticket editcategory <id> [label] [emoji] [description] [role] [clearrole]", value: "Modifier un type de ticket existant (un ou plusieurs champs)", inline: false },
           { name: "/ticket removecategory <id>", value: "Supprimer un type de ticket du menu déroulant", inline: false },
           { name: "/ticket close [raison]", value: "Fermer le ticket actuel (et l'archiver)", inline: false },
           { name: "/ticket add <user>", value: "Ajouter un membre au ticket ouvert", inline: false },

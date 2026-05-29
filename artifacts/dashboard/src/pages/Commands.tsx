@@ -452,6 +452,21 @@ const CATEGORIES: Category[] = [
         ],
       },
       {
+        name: "/ticket editcategory",
+        usage: "/ticket editcategory <id> [label] [emoji] [description] [role] [clearrole]",
+        description: "Modifier un type de ticket existant sans le supprimer et recréer.",
+        details: "Tous les champs sont optionnels sauf l'id — seuls ceux renseignés seront modifiés. Pour retirer le rôle mentionné, utilise clearrole:true.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "id", description: "Identifiant du type à modifier (ex: owner, abus)", required: true },
+          { name: "label", description: "Nouveau nom affiché dans le menu", required: false },
+          { name: "emoji", description: "Nouvel emoji", required: false },
+          { name: "description", description: "Nouvelle description courte", required: false },
+          { name: "role", description: "Nouveau rôle mentionné à l'ouverture", required: false },
+          { name: "clearrole", description: "Mettre à true pour retirer le rôle mentionné", required: false },
+        ],
+      },
+      {
         name: "/ticket removecategory",
         usage: "/ticket removecategory <id>",
         description: "Supprimer un type de ticket du menu déroulant.",
