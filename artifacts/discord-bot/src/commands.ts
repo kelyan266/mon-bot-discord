@@ -125,11 +125,14 @@ import {
   setLevelRole,
 } from "./levelRoles.js";
 import {
+  addTicketCategory,
   addTicketSupportRole,
+  autoCreateLogChannel,
   buildPanel,
   getTicketConfig,
   handleTicketClose,
   removeTicket,
+  removeTicketCategory,
   removeTicketSupportRole,
   saveTicketConfig,
 } from "./tickets.js";
@@ -1601,6 +1604,60 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
               max_length: 80,
             },
           ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "addcategory",
+          description: "Ajouter un type de ticket dans le menu déroulant du panel",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "Identifiant unique (ex: owner, support, abus) — sans espaces",
+              required: true,
+              max_length: 20,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "label",
+              description: "Nom affiché dans le menu (ex: Ticket Owner)",
+              required: true,
+              max_length: 50,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "emoji",
+              description: "Emoji affiché à côté du nom (ex: 👑)",
+              required: true,
+              max_length: 10,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "description",
+              description: "Description courte affichée dans le menu (ex: Contacter le staff owner)",
+              required: true,
+              max_length: 100,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "removecategory",
+          description: "Supprimer un type de ticket du menu déroulant",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "Identifiant du type à supprimer (ex: owner, support, abus)",
+              required: true,
+              max_length: 20,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "autologs",
+          description: "Créer automatiquement les salons de logs pour les tickets",
         },
       ],
     },
@@ -3647,13 +3704,18 @@ async function handleTicket(
     const description =
       interaction.options.getString("description") ?? undefined;
     const channel = interaction.channel as TextChannel;
-    await channel.send(buildPanel(description));
+    const config = await getTicketConfig(guild.id);
+    await channel.send(buildPanel(description, config.categories));
     await reply(
       interaction,
       new EmbedBuilder()
         .setColor(COLOR_SUCCESS)
         .setTitle("✅ Panel posté")
-        .setDescription("Le bouton d'ouverture de ticket a été publié."),
+        .setDescription(
+          config.categories.length > 0
+            ? `Panel avec **${config.categories.length}** catégorie(s) publié.`
+            : "Le bouton d'ouverture de ticket a été publié.",
+        ),
       true,
     );
     return;
@@ -3941,6 +4003,98 @@ async function handleTicket(
         .setDescription(`\`${oldName}\` → \`${safeName}\``),
       true,
     );
+    return;
+  }
+
+  if (sub === "addcategory") {
+    const id = interaction.options
+      .getString("id", true)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .slice(0, 20);
+    const label = interaction.options.getString("label", true);
+    const emoji = interaction.options.getString("emoji", true);
+    const description = interaction.options.getString("description", true);
+
+    const added = await addTicketCategory(guild.id, { id, label, emoji, description });
+    const config = await getTicketConfig(guild.id);
+
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(added ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(added ? "✅ Catégorie ajoutée" : "⚠️ ID déjà utilisé ou limite atteinte")
+        .setDescription(
+          added
+            ? `${emoji} **${label}** ajouté au panel.\nReposte le panel avec \`/ticket panel\` pour l'afficher.`
+            : "Cet ID existe déjà ou tu as atteint la limite de 25 catégories.",
+        )
+        .addFields({
+          name: `Catégories (${config.categories.length})`,
+          value:
+            config.categories
+              .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)`)
+              .join("\n") || "Aucune",
+        }),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "removecategory") {
+    const id = interaction.options.getString("id", true).toLowerCase();
+    const removed = await removeTicketCategory(guild.id, id);
+    const config = await getTicketConfig(guild.id);
+
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(removed ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle(removed ? "✅ Catégorie supprimée" : "⚠️ Catégorie introuvable")
+        .setDescription(
+          removed
+            ? `La catégorie \`${id}\` a été supprimée.\nReposte le panel avec \`/ticket panel\` pour mettre à jour.`
+            : `Aucune catégorie avec l'ID \`${id}\`.`,
+        )
+        .addFields({
+          name: `Catégories restantes (${config.categories.length})`,
+          value:
+            config.categories
+              .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)`)
+              .join("\n") || "Aucune",
+        }),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "autologs") {
+    await interaction.deferReply({ ephemeral: true });
+    try {
+      const channelId = await autoCreateLogChannel(guild);
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(COLOR_SUCCESS)
+            .setTitle("✅ Salons de logs créés")
+            .setDescription(
+              `Le bot a créé automatiquement :\n• Catégorie **📋 Logs Tickets**\n• Salon <#${channelId}>\n\nTous les tickets fermés seront archivés là-bas.`,
+            ),
+        ],
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erreur inconnue";
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(COLOR_DANGER)
+            .setTitle("❌ Échec de la création")
+            .setDescription(
+              `Impossible de créer les salons.\n\`${msg}\`\n\nVérifie que le bot a la permission **Gérer les salons**.`,
+            ),
+        ],
+      });
+    }
     return;
   }
 }

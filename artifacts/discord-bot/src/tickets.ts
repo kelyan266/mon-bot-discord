@@ -9,15 +9,25 @@ import {
   EmbedBuilder,
   OverwriteType,
   PermissionFlagsBits,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   type ButtonInteraction,
   type Guild,
   type GuildMember,
+  type MessageComponentInteraction,
   type TextChannel,
 } from "discord.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
 const FILE = path.join(DATA_DIR, "tickets.json");
+
+export interface TicketCategory {
+  id: string;
+  label: string;
+  emoji: string;
+  description: string;
+}
 
 export interface TicketGuildConfig {
   supportRoleIds: string[];
@@ -26,6 +36,7 @@ export interface TicketGuildConfig {
   welcomeMessage?: string;
   ticketCount: number;
   openTickets: Record<string, string>;
+  categories: TicketCategory[];
   /** @deprecated migrated to supportRoleIds */
   supportRoleId?: string;
 }
@@ -68,11 +79,13 @@ function getGuild(db: TicketsDb, guildId: string): TicketGuildConfig {
     supportRoleIds: [],
     ticketCount: 0,
     openTickets: {},
+    categories: [],
   });
   if (!g.supportRoleIds) {
     g.supportRoleIds = g.supportRoleId ? [g.supportRoleId] : [];
     delete g.supportRoleId;
   }
+  if (!g.categories) g.categories = [];
   return g;
 }
 
@@ -120,6 +133,32 @@ export async function removeTicketSupportRole(
   return true;
 }
 
+export async function addTicketCategory(
+  guildId: string,
+  cat: TicketCategory,
+): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  if (guild.categories.some((c) => c.id === cat.id)) return false;
+  if (guild.categories.length >= 25) return false;
+  guild.categories.push(cat);
+  await persist();
+  return true;
+}
+
+export async function removeTicketCategory(
+  guildId: string,
+  catId: string,
+): Promise<boolean> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  const before = guild.categories.length;
+  guild.categories = guild.categories.filter((c) => c.id !== catId);
+  if (guild.categories.length === before) return false;
+  await persist();
+  return true;
+}
+
 export async function getOpenTicket(
   guildId: string,
   userId: string,
@@ -151,23 +190,118 @@ export async function removeTicket(
   await persist();
 }
 
+export async function autoCreateLogChannel(guild: Guild): Promise<string> {
+  const me = guild.members.me;
+  if (!me) throw new Error("Bot introuvable dans le serveur.");
+
+  const botPerms = [
+    PermissionFlagsBits.ViewChannel,
+    PermissionFlagsBits.SendMessages,
+    PermissionFlagsBits.ReadMessageHistory,
+    PermissionFlagsBits.ManageChannels,
+    PermissionFlagsBits.EmbedLinks,
+  ];
+
+  let logCategory = guild.channels.cache.find(
+    (c) =>
+      c.type === ChannelType.GuildCategory &&
+      c.name === "📋 Logs Tickets",
+  );
+
+  if (!logCategory) {
+    logCategory = await guild.channels.create({
+      name: "📋 Logs Tickets",
+      type: ChannelType.GuildCategory,
+      permissionOverwrites: [
+        {
+          id: guild.id,
+          type: OverwriteType.Role,
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+        {
+          id: me.id,
+          type: OverwriteType.Member,
+          allow: botPerms,
+        },
+      ],
+    });
+  }
+
+  let logChannel = guild.channels.cache.find(
+    (c) =>
+      c.type === ChannelType.GuildText &&
+      c.parentId === logCategory!.id &&
+      c.name === "📝-logs-tickets",
+  );
+
+  if (!logChannel) {
+    logChannel = await guild.channels.create({
+      name: "📝-logs-tickets",
+      type: ChannelType.GuildText,
+      parent: logCategory.id,
+      topic: "Transcripts et logs des tickets fermés",
+      permissionOverwrites: [
+        {
+          id: guild.id,
+          type: OverwriteType.Role,
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+        {
+          id: me.id,
+          type: OverwriteType.Member,
+          allow: botPerms,
+        },
+      ],
+    });
+  }
+
+  await saveTicketConfig(guild.id, { logChannelId: logChannel.id });
+  return logChannel.id;
+}
+
 export const PANEL_BUTTON_ID = "ticket:open";
+export const PANEL_SELECT_ID = "ticket:select";
 export const CLOSE_BUTTON_ID = "ticket:close";
 
-export function buildPanel(description?: string): {
+export function buildPanel(
+  description?: string,
+  categories?: TicketCategory[],
+): {
   embeds: EmbedBuilder[];
-  components: ActionRowBuilder<ButtonBuilder>[];
+  components: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[];
 } {
-  return {
-    embeds: [
-      new EmbedBuilder()
-        .setColor(0x5865f2)
-        .setTitle("🎫 Support & Tickets")
-        .setDescription(
-          description ??
-            "Clique sur le bouton ci-dessous pour ouvrir un ticket.\nUn canal privé sera créé et l'équipe support sera notifiée.",
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle("🎫 Support & Tickets")
+    .setDescription(
+      description ??
+        "Sélectionne le type de ticket ci-dessous.\nUn canal privé sera créé et l'équipe support sera notifiée.",
+    );
+
+  if (categories && categories.length > 0) {
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(PANEL_SELECT_ID)
+      .setPlaceholder("📩 Choisir le type de ticket...")
+      .addOptions(
+        categories.map((cat) =>
+          new StringSelectMenuOptionBuilder()
+            .setLabel(cat.label)
+            .setValue(cat.id)
+            .setDescription(cat.description)
+            .setEmoji(cat.emoji),
         ),
-    ],
+      );
+
+    return {
+      embeds: [embed],
+      components: [
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+      ],
+    };
+  }
+
+  return {
+    embeds: [embed],
     components: [
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
@@ -189,7 +323,8 @@ function buildCloseRow(): ActionRowBuilder<ButtonBuilder> {
 }
 
 export async function handleTicketOpen(
-  interaction: ButtonInteraction,
+  interaction: MessageComponentInteraction,
+  categoryId?: string,
 ): Promise<void> {
   const guild = interaction.guild!;
   const member = interaction.member as GuildMember;
@@ -217,6 +352,10 @@ export async function handleTicketOpen(
 
   const me = guild.members.me;
   if (!me) return;
+
+  const category = categoryId
+    ? config.categories.find((c) => c.id === categoryId)
+    : undefined;
 
   const permissionOverwrites: import("discord.js").OverwriteResolvable[] = [
     {
@@ -262,14 +401,18 @@ export async function handleTicketOpen(
   }
 
   const ticketNum = config.ticketCount + 1;
-  const safeName = member.user.username.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 20);
-  const channelName = `ticket-${safeName}-${ticketNum}`;
+  const safeName = member.user.username
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-")
+    .slice(0, 16);
+  const catSlug = category ? category.id.slice(0, 10) + "-" : "";
+  const channelName = `ticket-${catSlug}${safeName}-${ticketNum}`;
 
   const channel = await guild.channels.create({
     name: channelName,
     type: ChannelType.GuildText,
     parent: config.categoryId ?? undefined,
-    topic: `Ticket de ${member.user.tag} · #${ticketNum}`,
+    topic: `${category ? `[${category.label}] ` : ""}Ticket de ${member.user.tag} · #${ticketNum}`,
     permissionOverwrites,
   });
 
@@ -286,7 +429,9 @@ export async function handleTicketOpen(
 
   const welcomeEmbed = new EmbedBuilder()
     .setColor(0x57f287)
-    .setTitle(`🎫 Ticket #${ticketNum}`)
+    .setTitle(
+      `${category ? category.emoji + " " : "🎫 "}Ticket #${ticketNum}${category ? ` — ${category.label}` : ""}`,
+    )
     .setDescription(welcomeText)
     .addFields({
       name: "Fermer",
@@ -335,8 +480,8 @@ export async function handleTicketClose(
       | TextChannel
       | undefined;
     if (logChannel) {
-      const messages = await channel
-        .messages.fetch({ limit: 50 })
+      const messages = await channel.messages
+        .fetch({ limit: 50 })
         .catch(() => null);
       const lines = messages
         ? [...messages.values()]
@@ -392,5 +537,7 @@ export async function handleTicketClose(
   }
 
   await new Promise((r) => setTimeout(r, 3000));
-  await channel.delete(`Ticket fermé par ${closer.user.tag}`).catch(() => undefined);
+  await channel
+    .delete(`Ticket fermé par ${closer.user.tag}`)
+    .catch(() => undefined);
 }

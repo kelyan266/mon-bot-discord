@@ -46,5 +46,29 @@
       "enabled": false,
       "alertChannelId": null
     }
+  },
+  "1499804920604393663": {
+    "antinuke": {
+      "enabled": false,
+      "banThreshold": 3,
+      "kickThreshold": 5,
+      "channelDeleteThreshold": 3,
+      "roleDeleteThreshold": 3,
+      "windowSeconds": 10,
+      "action": "strip",
+      "alertChannelId": null
+    },
+    "antiraid": {
+      "enabled": false,
+      "joinThreshold": 10,
+      "windowSeconds": 10,
+      "action": "kick",
+      "minAccountAgeDays": 7,
+      "alertChannelId": null
+    },
+    "antiwebhook": {
+      "enabled": false,
+      "alertChannelId": null
+    }
   }
 }

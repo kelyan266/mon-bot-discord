@@ -54,6 +54,7 @@ import { isAutomodEnabled, isXpEnabled } from "./settings.js";
 import {
   CLOSE_BUTTON_ID,
   PANEL_BUTTON_ID,
+  PANEL_SELECT_ID,
   handleTicketClose,
   handleTicketOpen,
 } from "./tickets.js";
@@ -244,7 +245,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.isStringSelectMenu()) {
     try {
-      if (interaction.customId === "lb_select") {
+      if (interaction.customId === PANEL_SELECT_ID) {
+        const categoryId = interaction.values[0];
+        await handleTicketOpen(interaction, categoryId);
+      } else if (interaction.customId === "lb_select") {
         await handleLeaderboardSelect(interaction);
       } else if (interaction.customId === HELP_SELECT_ID) {
         await handleHelpSelect(interaction);
