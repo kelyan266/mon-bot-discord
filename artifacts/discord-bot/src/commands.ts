@@ -6012,9 +6012,19 @@ const HELP_PAGES: Record<string, HelpPage> = {
         .setColor(COLOR_PRIMARY)
         .setTitle("🎟️ Tickets")
         .addFields(
-          { name: "/ticket close", value: "Fermer le ticket actuel (et l'archiver)", inline: false },
+          { name: "/ticket setup [category] [log]", value: "Configurer la catégorie et le salon de log", inline: false },
+          { name: "/ticket autologs", value: "Créer automatiquement les salons de logs 📋", inline: false },
+          { name: "/ticket panel [description]", value: "Poster le panel (bouton ou menu déroulant)", inline: false },
+          { name: "/ticket addcategory <id> <label> <emoji> <description>", value: "Ajouter un type de ticket dans le menu déroulant", inline: false },
+          { name: "/ticket removecategory <id>", value: "Supprimer un type de ticket du menu déroulant", inline: false },
+          { name: "/ticket close [raison]", value: "Fermer le ticket actuel (et l'archiver)", inline: false },
           { name: "/ticket add <user>", value: "Ajouter un membre au ticket ouvert", inline: false },
           { name: "/ticket remove <user>", value: "Retirer un membre du ticket ouvert", inline: false },
+          { name: "/ticket addsupportrole <role>", value: "Ajouter un rôle support", inline: false },
+          { name: "/ticket removesupportrole <role>", value: "Retirer un rôle support", inline: false },
+          { name: "/ticket setwelcome [message]", value: "Message de bienvenue personnalisé (variables : {user} {username} {ticket_count} {server})", inline: false },
+          { name: "/ticket rename <name>", value: "Renommer le salon du ticket actuel", inline: false },
+          { name: "/ticket config", value: "Voir la configuration actuelle du système de tickets", inline: false },
         )
         .setTimestamp(),
   },
@@ -6115,7 +6125,10 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/permissions view|add-role|remove-role|…", value: "Gérer les accès par catégorie", inline: false },
           { name: "/xp give|take|set|reset <user>", value: "Ajuster l'XP manuellement", inline: false },
           { name: "/economy give|take|set|reset <user>", value: "Gérer les pièces d'un membre", inline: false },
-          { name: "/setavatar", value: "Changer l'avatar du bot", inline: false },
+          { name: "/setavatar [image] [url]", value: "Changer l'avatar du bot (par serveur)", inline: false },
+          { name: "/setbanner [image] [url]", value: "Changer la bannière globale du bot", inline: false },
+          { name: "/setname <nom>", value: "Changer le nom global du bot (max 2x/heure)", inline: false },
+          { name: "/renamebot <nom>", value: "Changer le pseudo du bot sur ce serveur uniquement", inline: false },
         )
         .setTimestamp(),
   },

@@ -411,9 +411,61 @@ const CATEGORIES: Category[] = [
     color: "#E74C3C",
     commands: [
       {
+        name: "/ticket setup",
+        usage: "/ticket setup [category] [log]",
+        description: "Configurer la catégorie et le salon de log des tickets.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "category", description: "Catégorie où les tickets sont créés", required: false },
+          { name: "log", description: "Salon où les transcripts sont envoyés", required: false },
+        ],
+      },
+      {
+        name: "/ticket autologs",
+        usage: "/ticket autologs",
+        description: "Créer automatiquement la catégorie 📋 Logs Tickets et le salon 📝-logs-tickets.",
+        details: "Le bot crée lui-même les salons de logs avec les bonnes permissions. Plus besoin de les créer manuellement.",
+        permissions: "Gérer les salons",
+      },
+      {
+        name: "/ticket panel",
+        usage: "/ticket panel [description]",
+        description: "Poster le panel de tickets dans le salon actuel.",
+        details: "Affiche un menu déroulant si des catégories sont configurées, sinon un bouton simple.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "description", description: "Texte personnalisé dans l'embed du panel", required: false },
+        ],
+      },
+      {
+        name: "/ticket addcategory",
+        usage: "/ticket addcategory <id> <label> <emoji> <description>",
+        description: "Ajouter un type de ticket dans le menu déroulant du panel.",
+        details: "Ex : id=owner label=Ticket Owner emoji=👑 description=Contacter le staff owner. Le panel affichera un menu avec tous les types configurés.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "id", description: "Identifiant unique sans espaces (ex: owner)", required: true },
+          { name: "label", description: "Nom affiché dans le menu (ex: Ticket Owner)", required: true },
+          { name: "emoji", description: "Emoji affiché (ex: 👑)", required: true },
+          { name: "description", description: "Description courte dans le menu", required: true },
+        ],
+      },
+      {
+        name: "/ticket removecategory",
+        usage: "/ticket removecategory <id>",
+        description: "Supprimer un type de ticket du menu déroulant.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "id", description: "Identifiant du type à supprimer", required: true },
+        ],
+      },
+      {
         name: "/ticket close",
-        usage: "/ticket close",
-        description: "Fermer le ticket actuel (et l'archiver).",
+        usage: "/ticket close [raison]",
+        description: "Fermer le ticket actuel (transcript envoyé dans les logs).",
+        options: [
+          { name: "raison", description: "Raison de fermeture", required: false },
+        ],
       },
       {
         name: "/ticket add",
@@ -430,6 +482,48 @@ const CATEGORIES: Category[] = [
         options: [
           { name: "user", description: "Le membre à retirer", required: true },
         ],
+      },
+      {
+        name: "/ticket addsupportrole",
+        usage: "/ticket addsupportrole <role>",
+        description: "Ajouter un rôle support (peut voir et gérer les tickets).",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "role", description: "Rôle à ajouter", required: true },
+        ],
+      },
+      {
+        name: "/ticket removesupportrole",
+        usage: "/ticket removesupportrole <role>",
+        description: "Retirer un rôle support.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "role", description: "Rôle à retirer", required: true },
+        ],
+      },
+      {
+        name: "/ticket setwelcome",
+        usage: "/ticket setwelcome [message]",
+        description: "Définir un message de bienvenue personnalisé pour les tickets.",
+        details: "Variables disponibles : {user} {username} {ticket_count} {server}. Laisse vide pour réinitialiser.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "message", description: "Template du message (laisser vide pour réinitialiser)", required: false },
+        ],
+      },
+      {
+        name: "/ticket rename",
+        usage: "/ticket rename <name>",
+        description: "Renommer le salon du ticket actuel.",
+        options: [
+          { name: "name", description: "Nouveau nom du salon", required: true },
+        ],
+      },
+      {
+        name: "/ticket config",
+        usage: "/ticket config",
+        description: "Voir la configuration actuelle du système de tickets.",
+        permissions: "Gérer les salons",
       },
     ],
   },
@@ -729,12 +823,44 @@ const CATEGORIES: Category[] = [
       },
       {
         name: "/setavatar",
-        usage: "/setavatar <url>",
-        description: "Changer l'avatar du bot.",
-        details: "L'URL doit pointer vers une image PNG, JPG ou GIF. Soumis aux rate-limits Discord.",
-        permissions: "Propriétaire du bot",
+        usage: "/setavatar [image] [url]",
+        description: "Changer l'avatar du bot sur ce serveur uniquement.",
+        details: "Fournis une pièce jointe ou une URL vers une image PNG, JPG, GIF ou WEBP. Soumis aux rate-limits Discord.",
+        permissions: "Administrateur",
         options: [
-          { name: "url", description: "URL directe vers l'image", required: true },
+          { name: "image", description: "Fichier image en pièce jointe", required: false },
+          { name: "url", description: "URL publique de l'image", required: false },
+        ],
+      },
+      {
+        name: "/setbanner",
+        usage: "/setbanner [image] [url]",
+        description: "Changer la bannière globale du bot (sur tous les serveurs).",
+        details: "Format recommandé : PNG/JPG en 16:9 (ex : 960×540px minimum). Soumis aux rate-limits Discord.",
+        permissions: "Administrateur",
+        options: [
+          { name: "image", description: "Fichier image en pièce jointe", required: false },
+          { name: "url", description: "URL publique de l'image", required: false },
+        ],
+      },
+      {
+        name: "/setname",
+        usage: "/setname <nom>",
+        description: "Changer le nom global du bot (sur tous les serveurs).",
+        details: "Discord limite ce changement à 2 fois par heure maximum.",
+        permissions: "Administrateur",
+        options: [
+          { name: "nom", description: "Nouveau nom (2-32 caractères)", required: true },
+        ],
+      },
+      {
+        name: "/renamebot",
+        usage: "/renamebot <nom>",
+        description: "Changer le pseudo du bot sur ce serveur uniquement.",
+        details: "Le nom global reste inchangé sur les autres serveurs.",
+        permissions: "Administrateur",
+        options: [
+          { name: "nom", description: "Nouveau pseudo (max 32 caractères)", required: true },
         ],
       },
       {
