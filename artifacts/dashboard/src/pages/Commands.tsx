@@ -467,6 +467,28 @@ const CATEGORIES: Category[] = [
         ],
       },
       {
+        name: "/ticket addcategoryrole",
+        usage: "/ticket addcategoryrole <id> <role>",
+        description: "Ajouter un rôle mentionné à l'ouverture d'un type de ticket.",
+        details: "Permet d'avoir plusieurs rôles par catégorie. Si au moins un rôle est défini sur la catégorie, les rôles support généraux ne sont pas mentionnés.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "id", description: "Identifiant du type de ticket (ex: owner, abus)", required: true },
+          { name: "role", description: "Rôle à ajouter", required: true },
+        ],
+      },
+      {
+        name: "/ticket removecategoryrole",
+        usage: "/ticket removecategoryrole <id> <role>",
+        description: "Retirer un rôle d'un type de ticket.",
+        details: "Si tous les rôles sont retirés, les rôles support généraux seront à nouveau utilisés.",
+        permissions: "Gérer les salons",
+        options: [
+          { name: "id", description: "Identifiant du type de ticket", required: true },
+          { name: "role", description: "Rôle à retirer", required: true },
+        ],
+      },
+      {
         name: "/ticket removecategory",
         usage: "/ticket removecategory <id>",
         description: "Supprimer un type de ticket du menu déroulant.",

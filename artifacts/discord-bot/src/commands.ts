@@ -129,9 +129,11 @@ import {
   addTicketSupportRole,
   autoCreateLogChannel,
   buildPanel,
+  addCategoryRole,
   editTicketCategory,
   getTicketConfig,
   handleTicketClose,
+  removeCategoryRole,
   removeTicket,
   removeTicketCategory,
   removeTicketSupportRole,
@@ -1706,6 +1708,46 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
               description: "Identifiant du type à supprimer (ex: owner, support, abus)",
               required: true,
               max_length: 20,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "addcategoryrole",
+          description: "Ajouter un rôle mentionné à l'ouverture d'un type de ticket",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "Identifiant du type de ticket (ex: owner, abus)",
+              required: true,
+              max_length: 20,
+            },
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Rôle à ajouter",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "removecategoryrole",
+          description: "Retirer un rôle d'un type de ticket",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "id",
+              description: "Identifiant du type de ticket (ex: owner, abus)",
+              required: true,
+              max_length: 20,
+            },
+            {
+              type: ApplicationCommandOptionType.Role,
+              name: "role",
+              description: "Rôle à retirer",
+              required: true,
             },
           ],
         },
@@ -3930,8 +3972,10 @@ async function handleTicket(
 
     const categoriesValue = config.categories.length > 0
       ? config.categories.map((c, i) => {
-          const role = c.mentionRoleId ? ` → <@&${c.mentionRoleId}>` : "";
-          return `**${i + 1}.** ${c.emoji} **${c.label}** — \`id: ${c.id}\`${role}\n┗ *${c.description}*`;
+          const roles = c.mentionRoleIds?.length
+            ? ` → ${c.mentionRoleIds.map((r) => `<@&${r}>`).join(", ")}`
+            : "";
+          return `**${i + 1}.** ${c.emoji} **${c.label}** — \`id: ${c.id}\`${roles}\n┗ *${c.description}*`;
         }).join("\n")
       : "Aucune catégorie — panel avec bouton simple.\nUtilise `/ticket addcategory` pour créer un menu déroulant.";
 
@@ -4106,7 +4150,7 @@ async function handleTicket(
       label,
       emoji,
       description,
-      mentionRoleId: mentionRole?.id,
+      mentionRoleIds: mentionRole ? [mentionRole.id] : [],
     });
     const config = await getTicketConfig(guild.id);
 
@@ -4124,7 +4168,7 @@ async function handleTicket(
           name: `Catégories (${config.categories.length})`,
           value:
             config.categories
-              .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)${c.mentionRoleId ? ` → <@&${c.mentionRoleId}>` : ""}`)
+              .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)${c.mentionRoleIds?.length ? ` → ${c.mentionRoleIds.map((r) => `<@&${r}>`).join(", ")}` : ""}`)
               .join("\n") || "Aucune",
         }),
       true,
@@ -4159,7 +4203,7 @@ async function handleTicket(
         label,
         emoji,
         description,
-        mentionRoleId: mentionRole?.id,
+        mentionRoleIds: mentionRole ? [mentionRole.id] : undefined,
       },
       clearRole,
     );
@@ -4184,14 +4228,14 @@ async function handleTicket(
         .setTitle("✅ Catégorie modifiée")
         .setDescription(
           `${updated.emoji} **${updated.label}** (\`${updated.id}\`) mis à jour.` +
-          (updated.mentionRoleId ? `\nRôle mentionné : <@&${updated.mentionRoleId}>` : "\nAucun rôle mentionné.") +
+          (updated.mentionRoleIds?.length ? `\nRôles mentionnés : ${updated.mentionRoleIds.map((r) => `<@&${r}>`).join(", ")}` : "\nAucun rôle mentionné.") +
           `\nReposte le panel avec \`/ticket panel\` si tu veux mettre à jour l'affichage.`,
         )
         .addFields({
           name: `Toutes les catégories (${config.categories.length})`,
           value:
             config.categories
-              .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)${c.mentionRoleId ? ` → <@&${c.mentionRoleId}>` : ""}`)
+              .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)${c.mentionRoleIds?.length ? ` → ${c.mentionRoleIds.map((r) => `<@&${r}>`).join(", ")}` : ""}`)
               .join("\n") || "Aucune",
         }),
       true,
@@ -4221,6 +4265,50 @@ async function handleTicket(
               .map((c) => `${c.emoji} **${c.label}** (\`${c.id}\`)`)
               .join("\n") || "Aucune",
         }),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "addcategoryrole") {
+    const id = interaction.options.getString("id", true).toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 20);
+    const role = interaction.options.getRole("role", true);
+    const updated = await addCategoryRole(guild.id, id, role.id);
+    if (!updated) {
+      await reply(interaction, new EmbedBuilder().setColor(COLOR_WARN).setTitle("⚠️ Catégorie introuvable").setDescription(`Aucune catégorie avec l'ID \`${id}\`.`), true);
+      return;
+    }
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Rôle ajouté")
+        .setDescription(
+          `<@&${role.id}> sera mentionné à l'ouverture d'un **${updated.label}**.\n\n` +
+          `Rôles actuels : ${updated.mentionRoleIds.length ? updated.mentionRoleIds.map((r) => `<@&${r}>`).join(", ") : "aucun"}`,
+        ),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "removecategoryrole") {
+    const id = interaction.options.getString("id", true).toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 20);
+    const role = interaction.options.getRole("role", true);
+    const updated = await removeCategoryRole(guild.id, id, role.id);
+    if (!updated) {
+      await reply(interaction, new EmbedBuilder().setColor(COLOR_WARN).setTitle("⚠️ Catégorie introuvable").setDescription(`Aucune catégorie avec l'ID \`${id}\`.`), true);
+      return;
+    }
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Rôle retiré")
+        .setDescription(
+          `<@&${role.id}> retiré de **${updated.label}**.\n\n` +
+          `Rôles restants : ${updated.mentionRoleIds.length ? updated.mentionRoleIds.map((r) => `<@&${r}>`).join(", ") : "aucun — les rôles support généraux seront utilisés."}`,
+        ),
       true,
     );
     return;
@@ -6205,8 +6293,10 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/ticket setup [category] [log]", value: "Configurer la catégorie et le salon de log", inline: false },
           { name: "/ticket autologs", value: "Créer automatiquement les salons de logs 📋", inline: false },
           { name: "/ticket panel [description]", value: "Poster le panel (bouton ou menu déroulant)", inline: false },
-          { name: "/ticket addcategory <id> <label> <emoji> <description> [role]", value: "Ajouter un type de ticket — `role` = rôle mentionné à l'ouverture", inline: false },
+          { name: "/ticket addcategory <id> <label> <emoji> <description> [role]", value: "Ajouter un type de ticket — `role` = premier rôle mentionné", inline: false },
           { name: "/ticket editcategory <id> [label] [emoji] [description] [role] [clearrole]", value: "Modifier un type de ticket existant (un ou plusieurs champs)", inline: false },
+          { name: "/ticket addcategoryrole <id> <role>", value: "Ajouter un rôle mentionné à l'ouverture d'un type de ticket", inline: false },
+          { name: "/ticket removecategoryrole <id> <role>", value: "Retirer un rôle d'un type de ticket", inline: false },
           { name: "/ticket removecategory <id>", value: "Supprimer un type de ticket du menu déroulant", inline: false },
           { name: "/ticket close [raison]", value: "Fermer le ticket actuel (et l'archiver)", inline: false },
           { name: "/ticket add <user>", value: "Ajouter un membre au ticket ouvert", inline: false },

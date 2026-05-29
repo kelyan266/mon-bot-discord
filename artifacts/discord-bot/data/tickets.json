@@ -16,6 +16,27 @@
         "1504936222202662932",
         "1507887860248871063"
       ]
+    },
+    "1499804920604393663": {
+      "supportRoleIds": [],
+      "ticketCount": 0,
+      "openTickets": {},
+      "categories": [
+        {
+          "id": "owner",
+          "label": "Owner",
+          "emoji": "👑",
+          "description": "Ticket pour contacter un Owner",
+          "mentionRoleId": "1499804920923164690"
+        },
+        {
+          "id": "support",
+          "label": "Support",
+          "emoji": "🫂",
+          "description": "Ticket pour qu’un support répondent à vos questions.",
+          "mentionRoleId": "1509916032037552198"
+        }
+      ]
     }
   }
 }

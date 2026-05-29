@@ -27,7 +27,7 @@ export interface TicketCategory {
   label: string;
   emoji: string;
   description: string;
-  mentionRoleId?: string;
+  mentionRoleIds: string[];
 }
 
 export interface TicketGuildConfig {
@@ -87,6 +87,13 @@ function getGuild(db: TicketsDb, guildId: string): TicketGuildConfig {
     delete g.supportRoleId;
   }
   if (!g.categories) g.categories = [];
+  for (const cat of g.categories) {
+    if (!cat.mentionRoleIds) {
+      const legacy = (cat as unknown as Record<string, string>)["mentionRoleId"];
+      cat.mentionRoleIds = legacy ? [legacy] : [];
+      delete (cat as unknown as Record<string, string>)["mentionRoleId"];
+    }
+  }
   return g;
 }
 
@@ -161,10 +168,38 @@ export async function editTicketCategory(
   if (patch.emoji !== undefined) cat.emoji = patch.emoji;
   if (patch.description !== undefined) cat.description = patch.description;
   if (clearRole) {
-    delete cat.mentionRoleId;
-  } else if (patch.mentionRoleId !== undefined) {
-    cat.mentionRoleId = patch.mentionRoleId;
+    cat.mentionRoleIds = [];
+  } else if (patch.mentionRoleIds !== undefined && patch.mentionRoleIds.length > 0) {
+    cat.mentionRoleIds = patch.mentionRoleIds;
   }
+  await persist();
+  return { ...cat };
+}
+
+export async function addCategoryRole(
+  guildId: string,
+  catId: string,
+  roleId: string,
+): Promise<TicketCategory | null> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  const cat = guild.categories.find((c) => c.id === catId);
+  if (!cat) return null;
+  if (!cat.mentionRoleIds.includes(roleId)) cat.mentionRoleIds.push(roleId);
+  await persist();
+  return { ...cat };
+}
+
+export async function removeCategoryRole(
+  guildId: string,
+  catId: string,
+  roleId: string,
+): Promise<TicketCategory | null> {
+  const db = await ensureLoaded();
+  const guild = getGuild(db, guildId);
+  const cat = guild.categories.find((c) => c.id === catId);
+  if (!cat) return null;
+  cat.mentionRoleIds = cat.mentionRoleIds.filter((id) => id !== roleId);
   await persist();
   return { ...cat };
 }
@@ -475,8 +510,8 @@ export async function handleTicketOpen(
     .setTimestamp();
 
   const pingRoleIds =
-    category?.mentionRoleId
-      ? [category.mentionRoleId]
+    category?.mentionRoleIds?.length
+      ? category.mentionRoleIds
       : config.supportRoleIds;
   const ping = pingRoleIds.map((id) => `<@&${id}>`).join(" ");
 
