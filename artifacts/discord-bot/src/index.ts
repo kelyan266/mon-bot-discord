@@ -1,3 +1,8 @@
+if (process.env.DISABLE_BOT === "true") {
+  console.log("[Bot] DISABLE_BOT=true — instance de dev désactivée, seule la production tourne.");
+  process.exit(0);
+}
+
 import {
   ActivityType,
   ChannelType,
