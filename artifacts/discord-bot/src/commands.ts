@@ -1384,6 +1384,23 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "setname",
+      description: "Changer le nom global du bot (sur tous les serveurs)",
+      default_member_permissions:
+        PermissionFlagsBits.Administrator.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "nom",
+          description: "Nouveau nom du bot (2-32 caractères) — max 2 changements/heure",
+          required: true,
+          min_length: 2,
+          max_length: 32,
+        },
+      ],
+    },
+    {
       name: "setbanner",
       description: "Changer la bannière globale du bot",
       default_member_permissions:
@@ -2592,6 +2609,8 @@ export async function handleInteraction(
       return handleLevelsToggle(interaction);
     case "setavatar":
       return handleSetAvatar(interaction);
+    case "setname":
+      return handleSetName(interaction);
     case "setbanner":
       return handleSetBanner(interaction);
     case "renamebot":
@@ -7525,6 +7544,44 @@ async function handleRenameBot(
           .setTitle("❌ Échec du renommage")
           .setDescription(
             `Impossible de renommer le bot.\n\`${msg}\`\n\nVérifie que le bot a la permission de changer son pseudo sur ce serveur.`,
+          ),
+      ],
+    });
+  }
+}
+
+async function handleSetName(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const nom = interaction.options.getString("nom", true).trim();
+
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    await interaction.client.rest.patch("/users/@me", {
+      body: { username: nom },
+    });
+
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Nom du bot mis à jour")
+          .setDescription(
+            `Le bot s'appelle maintenant **${nom}** sur **tous les serveurs**.\n⚠️ Discord limite ce changement à 2 fois par heure.`,
+          )
+          .setThumbnail(interaction.client.user.displayAvatarURL()),
+      ],
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erreur inconnue";
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("❌ Échec du changement de nom")
+          .setDescription(
+            `Impossible de changer le nom du bot.\n\`${msg}\`\n\nSi tu viens de changer le nom récemment, attends 1 heure avant de réessayer.`,
           ),
       ],
     });
