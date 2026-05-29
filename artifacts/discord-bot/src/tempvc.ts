@@ -93,7 +93,9 @@ export function isHubChannel(guildId: string, channelId: string): boolean {
 
 export async function cleanupTempVC(guild: Guild, channelId: string): Promise<void> {
   if (!isTempVC(channelId)) return;
-  const channel = guild.channels.cache.get(channelId) as VoiceChannel | undefined;
+
+  // Use fetch instead of cache.get so it works after bot restarts
+  const channel = await guild.channels.fetch(channelId).catch(() => null) as VoiceChannel | null;
   if (!channel) {
     unregisterTempVC(channelId);
     return;
@@ -103,4 +105,23 @@ export async function cleanupTempVC(guild: Guild, channelId: string): Promise<vo
     unregisterTempVC(channelId);
     await channel.delete("Salon vocal temporaire vide").catch(() => null);
   }
+}
+
+export async function cleanupAllOrphanedTempVCs(guild: Guild): Promise<void> {
+  const data = load();
+  const entries = Object.entries(data.channels).filter(([, e]) => e.guildId === guild.id);
+  await Promise.all(
+    entries.map(async ([channelId]) => {
+      const channel = await guild.channels.fetch(channelId).catch(() => null) as VoiceChannel | null;
+      if (!channel) {
+        unregisterTempVC(channelId);
+        return;
+      }
+      const humans = channel.members.filter((m) => !m.user.bot).size;
+      if (humans === 0) {
+        unregisterTempVC(channelId);
+        await channel.delete("Salon vocal temporaire vide (nettoyage démarrage)").catch(() => null);
+      }
+    }),
+  );
 }

@@ -21,7 +21,7 @@ import {
   HELP_SELECT_ID,
 } from "./commands.js";
 import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
-import { cleanupTempVC, isHubChannel, isTempVC, registerTempVC } from "./tempvc.js";
+import { cleanupAllOrphanedTempVCs, cleanupTempVC, isHubChannel, isTempVC, registerTempVC } from "./tempvc.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
@@ -130,6 +130,13 @@ client.once(Events.ClientReady, async (c) => {
   );
   await syncCommands(c.user.id);
   updatePresence();
+
+  // Clean up orphaned temp VCs from before last restart
+  for (const guild of c.guilds.cache.values()) {
+    cleanupAllOrphanedTempVCs(guild).catch((err) =>
+      console.error(`TempVC startup cleanup failed for ${guild.id}:`, err),
+    );
+  }
 });
 
 client.on(Events.GuildCreate, () => updatePresence());
