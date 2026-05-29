@@ -10,5 +10,11 @@
     "channelId": null,
     "logMessages": true,
     "logVoice": true
+  },
+  "1499804920604393663": {
+    "enabled": false,
+    "channelId": null,
+    "logMessages": true,
+    "logVoice": true
   }
 }

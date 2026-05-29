@@ -19,7 +19,7 @@
     },
     "1499804920604393663": {
       "supportRoleIds": [],
-      "ticketCount": 0,
+      "ticketCount": 2,
       "openTickets": {},
       "categories": [
         {
@@ -27,16 +27,40 @@
           "label": "Owner",
           "emoji": "👑",
           "description": "Ticket pour contacter un Owner",
-          "mentionRoleId": "1499804920923164690"
+          "mentionRoleIds": [
+            "1499804920923164690"
+          ]
         },
         {
           "id": "support",
           "label": "Support",
           "emoji": "🫂",
           "description": "Ticket pour qu’un support répondent à vos questions.",
-          "mentionRoleId": "1509916032037552198"
+          "mentionRoleIds": [
+            "1509916032037552198"
+          ]
+        },
+        {
+          "id": "abus",
+          "label": "Abus de perm",
+          "emoji": "🚫",
+          "description": "Ticket à faire si vous êtes sujet à un abus de permissions",
+          "mentionRoleIds": [
+            "1499804920923164683"
+          ]
+        },
+        {
+          "id": "rankup",
+          "label": "Rank-Up",
+          "emoji": "🆙",
+          "description": "Pour toute demande de rank-up",
+          "mentionRoleIds": [
+            "1499804920864313619"
+          ]
         }
-      ]
+      ],
+      "welcomeMessage": "Bonjour, {user}, un membre du <@&1509917274419630181>  viendra s’occuper de ton ticket",
+      "logChannelId": "1509906543691436112"
     }
   }
 }
