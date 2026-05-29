@@ -566,6 +566,34 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "dmall",
+      description: "Envoyer un message privé à tous les membres (ou à un rôle)",
+      default_member_permissions: PermissionFlagsBits.Administrator.toString(),
+      dm_permission: false,
+      options: [
+        {
+          name: "message",
+          description: "Message à envoyer",
+          type: ApplicationCommandOptionType.String,
+          required: true,
+          max_length: 1800,
+        },
+        {
+          name: "role",
+          description: "Envoyer uniquement aux membres ayant ce rôle (optionnel)",
+          type: ApplicationCommandOptionType.Role,
+          required: false,
+        },
+        {
+          name: "titre",
+          description: "Titre de l'embed (optionnel)",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+          max_length: 100,
+        },
+      ],
+    },
+    {
       name: "help",
       description: "Show the list of available commands (only visible to you)",
       dm_permission: false,
@@ -2760,6 +2788,8 @@ export async function handleInteraction(
       return handlePartenariat(interaction);
     case "dm":
       return handleDm(interaction);
+    case "dmall":
+      return handleDmAll(interaction);
     case "channelstats":
       return handleChannelStats(interaction);
     case "level":
@@ -5395,6 +5425,85 @@ async function handleDm(
   );
 }
 
+async function handleDmAll(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const text = interaction.options.getString("message", true);
+  const role = interaction.options.getRole("role");
+  const titre = interaction.options.getString("titre") ?? undefined;
+
+  await interaction.deferReply({ ephemeral: true });
+
+  await guild.members.fetch();
+  const targets = guild.members.cache.filter(
+    (m) =>
+      !m.user.bot &&
+      m.id !== interaction.user.id &&
+      (role ? m.roles.cache.has(role.id) : true),
+  );
+
+  if (targets.size === 0) {
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_WARN)
+          .setTitle("⚠️ Aucun membre ciblé")
+          .setDescription(role ? `Aucun membre humain avec le rôle <@&${role.id}>.` : "Aucun membre humain trouvé."),
+      ],
+    });
+    return;
+  }
+
+  const dmEmbed = new EmbedBuilder()
+    .setColor(COLOR_PRIMARY)
+    .setAuthor({
+      name: `Message du serveur ${guild.name}`,
+      iconURL: guild.iconURL({ size: 128 }) ?? undefined,
+    })
+    .setDescription(text.replaceAll("\\n", "\n"))
+    .setFooter({ text: `Envoyé par ${interaction.user.tag}` })
+    .setTimestamp();
+
+  if (titre) dmEmbed.setTitle(titre);
+
+  await interaction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLOR_PRIMARY)
+        .setTitle("📨 Envoi en cours…")
+        .setDescription(`Envoi à **${targets.size}** membre(s)${role ? ` ayant le rôle <@&${role.id}>` : ""}…`),
+    ],
+  });
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const [, member] of targets) {
+    try {
+      await member.send({ embeds: [dmEmbed] });
+      sent++;
+    } catch {
+      failed++;
+    }
+    await new Promise((r) => setTimeout(r, 600));
+  }
+
+  await interaction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(sent > 0 ? COLOR_SUCCESS : COLOR_WARN)
+        .setTitle("📨 DM de masse terminé")
+        .addFields(
+          { name: "✅ Envoyés", value: `**${sent}**`, inline: true },
+          { name: "❌ Échoués", value: `**${failed}** *(DM fermés)*`, inline: true },
+          { name: "👥 Cible", value: role ? `<@&${role.id}>` : "Tous les membres", inline: true },
+        )
+        .setTimestamp(),
+    ],
+  });
+}
+
 async function handleActivity(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -6382,6 +6491,7 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/announce <message> [salon] [embed]", value: "Annonce @everyone (option embed stylé)", inline: false },
           { name: "/embed <message> [titre] [couleur]", value: "Annonce en embed personnalisé", inline: false },
           { name: "/dm <user> <message>", value: "Envoyer un message privé via le bot", inline: false },
+          { name: "/dmall <message> [role] [titre]", value: "Envoyer un DM à tous les membres (ou à un rôle précis) — ⚠️ Administrateur", inline: false },
           { name: "/partenariat <partenaire> <message> [lien] [image] [logo] [salon]", value: "Publier une annonce de partenariat formatée avec embed doré", inline: false },
         )
         .setTimestamp(),

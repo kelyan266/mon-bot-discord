@@ -786,6 +786,18 @@ const CATEGORIES: Category[] = [
         ],
       },
       {
+        name: "/dmall",
+        usage: "/dmall <message> [role] [titre]",
+        description: "Envoyer un message privé à tous les membres du serveur (ou à un rôle).",
+        details: "Le bot envoie un embed à chaque membre humain. Un délai est appliqué entre chaque envoi pour éviter les rate-limits Discord. Les membres avec les DM fermés sont comptés dans les échecs. Un résumé (envoyés / échoués) est affiché à la fin.",
+        permissions: "Administrateur",
+        options: [
+          { name: "message", description: "Contenu du message (variables \\n pour saut de ligne)", required: true },
+          { name: "role", description: "Restreindre l'envoi aux membres ayant ce rôle", required: false },
+          { name: "titre", description: "Titre de l'embed (optionnel)", required: false },
+        ],
+      },
+      {
         name: "/partenariat",
         usage: "/partenariat <partenaire> <message> [lien] [image] [logo] [salon]",
         description: "Publier une annonce de partenariat formatée avec embed doré.",
