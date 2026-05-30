@@ -5522,6 +5522,7 @@ async function handleDmAll(
 
   let sent = 0;
   let failed = 0;
+  let firstError: string | null = null;
 
   const memberList = [...targets.values()];
   const BATCH_SIZE = 5;
@@ -5531,31 +5532,39 @@ async function handleDmAll(
     const batch = memberList.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(
       batch.map((member) =>
-        member.send({ embeds: [dmEmbed], components: dmComponents }),
+        member.send({
+          embeds: [dmEmbed],
+          ...(dmComponents.length > 0 ? { components: dmComponents } : {}),
+        }),
       ),
     );
     for (const r of results) {
       if (r.status === "fulfilled") sent++;
-      else failed++;
+      else {
+        failed++;
+        if (!firstError) firstError = String(r.reason);
+      }
     }
     if (i + BATCH_SIZE < memberList.length) {
       await new Promise((r) => setTimeout(r, BATCH_DELAY));
     }
   }
 
-  await interaction.editReply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(sent > 0 ? COLOR_SUCCESS : COLOR_WARN)
-        .setTitle("📨 DM de masse terminé")
-        .addFields(
-          { name: "✅ Envoyés", value: `**${sent}**`, inline: true },
-          { name: "❌ Échoués", value: `**${failed}** *(DM fermés)*`, inline: true },
-          { name: "👥 Cible", value: role ? `<@&${role.id}>` : "Tous les membres", inline: true },
-        )
-        .setTimestamp(),
-    ],
-  });
+  const resultEmbed = new EmbedBuilder()
+    .setColor(sent > 0 ? COLOR_SUCCESS : COLOR_WARN)
+    .setTitle("📨 DM de masse terminé")
+    .addFields(
+      { name: "✅ Envoyés", value: `**${sent}**`, inline: true },
+      { name: "❌ Échoués", value: `**${failed}**`, inline: true },
+      { name: "👥 Cible", value: role ? `<@&${role.id}>` : "Tous les membres", inline: true },
+    )
+    .setTimestamp();
+
+  if (firstError) {
+    resultEmbed.addFields({ name: "⚠️ Première erreur", value: `\`${firstError.slice(0, 1000)}\``, inline: false });
+  }
+
+  await interaction.editReply({ embeds: [resultEmbed] });
 }
 
 async function handleActivity(
