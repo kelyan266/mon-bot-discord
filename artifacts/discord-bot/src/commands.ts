@@ -3396,11 +3396,15 @@ async function handleUnbl(
 async function handleBlList(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
   const guild = interaction.guild!;
   const entries = await getBlacklist(guild.id);
 
   if (entries.length === 0) {
-    await reply(interaction, new EmbedBuilder().setColor(COLOR_SUCCESS).setDescription("✅ La blacklist est vide."), true);
+    await interaction.editReply({
+      embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setDescription("✅ La blacklist est vide.")],
+    });
     return;
   }
 
@@ -3415,15 +3419,15 @@ async function handleBlList(
     description = description ? description + "\n\n" + line : line;
   }
 
-  await reply(
-    interaction,
-    new EmbedBuilder()
-      .setColor(COLOR_DANGER)
-      .setTitle(`🚫 Blacklist — ${guild.name} (${entries.length})`)
-      .setDescription(description)
-      .setTimestamp(),
-    true,
-  );
+  await interaction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setTitle(`🚫 Blacklist — ${guild.name} (${entries.length})`)
+        .setDescription(description)
+        .setTimestamp(),
+    ],
+  });
 }
 
 async function handleBan(
