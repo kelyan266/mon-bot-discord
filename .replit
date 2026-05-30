@@ -63,4 +63,4 @@ channel = "stable-25_05"
 [userenv.shared]
 
 [userenv.development]
-DISABLE_BOT = "false"
+DISABLE_BOT = "true"
