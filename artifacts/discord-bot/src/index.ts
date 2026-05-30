@@ -28,6 +28,7 @@ import {
 import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
 import { cleanupAllOrphanedTempVCs, cleanupTempVC, isHubChannel, isTempVC, registerTempVC } from "./tempvc.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
+import { isBlacklisted } from "./blacklist.js";
 import { addWarning, getAutoRole, getWarnings } from "./storage.js";
 import { analyzeWithAI, toxicityEnabled } from "./toxicity.js";
 import { saveSnipe } from "./snipes.js";
@@ -563,6 +564,28 @@ client.on(Events.GuildMemberAdd, async (member) => {
   } catch (error) {
     console.error("Auto-role error:", error);
   }
+});
+
+// Blacklist: kick members on join if they are blacklisted
+client.on(Events.GuildMemberAdd, (member) => {
+  if (member.user.bot) return;
+  void isBlacklisted(member.guild.id, member.id).then(async (entry) => {
+    if (!entry) return;
+    try {
+      await member.send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setTitle("🚫 Tu es blacklisté de ce serveur")
+            .setDescription(`Tu as été blacklisté de **${member.guild.name}** et ne peux pas y rejoindre.`)
+            .addFields({ name: "Raison", value: entry.reason }),
+        ],
+      }).catch(() => undefined);
+      await member.ban({ reason: `[BL] ${entry.reason}` });
+    } catch {
+      // Ignore if ban fails
+    }
+  }).catch((err) => console.error("Blacklist join check failed:", err));
 });
 
 // Anti-raid detection (separate listener so it runs independently)

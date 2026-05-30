@@ -31,6 +31,12 @@ import {
 import { getUserStats } from "./antiSpam.js";
 import { getSnipe } from "./snipes.js";
 import {
+  addToBlacklist,
+  removeFromBlacklist,
+  getBlacklist,
+  isBlacklisted,
+} from "./blacklist.js";
+import {
   addRole as permAddRole,
   addUser as permAddUser,
   getAllPerms,
@@ -233,6 +239,64 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
           description: "Reason for the kick",
           type: ApplicationCommandOptionType.String,
           required: false,
+        },
+      ],
+    },
+    {
+      name: "bl",
+      description: "Gérer la blacklist du serveur",
+      default_member_permissions: PermissionFlagsBits.BanMembers.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "add",
+          description: "Ajouter un utilisateur à la blacklist (+ ban)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "user",
+              description: "Utilisateur à blacklister",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "raison",
+              description: "Raison de la blacklist",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "remove",
+          description: "Retirer un utilisateur de la blacklist (+ unban)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "user_id",
+              description: "ID de l'utilisateur à retirer",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "list",
+          description: "Voir tous les utilisateurs blacklistés",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "check",
+          description: "Vérifier si un utilisateur est blacklisté",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "user",
+              description: "Utilisateur à vérifier",
+              required: true,
+            },
+          ],
         },
       ],
     },
@@ -2736,6 +2800,8 @@ export async function handleInteraction(
       return handlePing(interaction);
     case "kick":
       return handleKick(interaction);
+    case "bl":
+      return handleBl(interaction);
     case "ban":
       return handleBan(interaction);
     case "unban":
@@ -3269,6 +3335,137 @@ async function handleKick(
       )
       .setTimestamp(),
   );
+}
+
+async function handleBl(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "add") {
+    const targetUser = interaction.options.getUser("user", true);
+    const raison = interaction.options.getString("raison") ?? "Aucune raison fournie";
+
+    if (targetUser.id === interaction.user.id) {
+      await reply(interaction, new EmbedBuilder().setColor(COLOR_DANGER).setDescription("❌ Tu ne peux pas te blacklister toi-même."), true);
+      return;
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    await addToBlacklist(guild.id, targetUser.id, targetUser.username, raison, interaction.user.id);
+
+    try {
+      await guild.members.ban(targetUser.id, { reason: `[BL] ${interaction.user.tag}: ${raison}` });
+    } catch {
+      // User might not be in the guild, ban fails silently
+    }
+
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setTitle("🚫 Utilisateur blacklisté")
+          .addFields(
+            { name: "Utilisateur", value: `${targetUser.tag} (\`${targetUser.id}\`)`, inline: true },
+            { name: "Raison", value: raison, inline: true },
+            { name: "Modérateur", value: `<@${interaction.user.id}>`, inline: true },
+          )
+          .setTimestamp(),
+      ],
+    });
+    return;
+  }
+
+  if (sub === "remove") {
+    const userId = interaction.options.getString("user_id", true).trim();
+    await interaction.deferReply({ ephemeral: true });
+
+    const removed = await removeFromBlacklist(guild.id, userId);
+    if (!removed) {
+      await interaction.editReply({
+        embeds: [new EmbedBuilder().setColor(COLOR_WARN).setDescription(`⚠️ L'utilisateur \`${userId}\` n'est pas dans la blacklist.`)],
+      });
+      return;
+    }
+
+    try {
+      await guild.members.unban(userId, `[BL Remove] ${interaction.user.tag}`);
+    } catch {
+      // Might not be banned
+    }
+
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setTitle("✅ Utilisateur retiré de la blacklist")
+          .setDescription(`\`${userId}\` a été retiré de la blacklist et unban.`)
+          .setTimestamp(),
+      ],
+    });
+    return;
+  }
+
+  if (sub === "list") {
+    const entries = await getBlacklist(guild.id);
+    if (entries.length === 0) {
+      await reply(interaction, new EmbedBuilder().setColor(COLOR_WARN).setDescription("✅ La blacklist est vide."), true);
+      return;
+    }
+
+    const lines = entries.map(
+      (e, i) =>
+        `**${i + 1}.** ${e.username} (\`${e.userId}\`)\n└ ${e.reason} — <@${e.moderatorId}> • <t:${Math.floor(e.addedAt / 1000)}:d>`,
+    );
+
+    const pages: string[] = [];
+    let current = "";
+    for (const line of lines) {
+      if ((current + "\n\n" + line).length > 3900) { pages.push(current); current = line; }
+      else current = current ? current + "\n\n" + line : line;
+    }
+    if (current) pages.push(current);
+
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setTitle(`🚫 Blacklist — ${guild.name} (${entries.length})`)
+        .setDescription(pages[0])
+        .setTimestamp(),
+      true,
+    );
+    return;
+  }
+
+  if (sub === "check") {
+    const targetUser = interaction.options.getUser("user", true);
+    const entry = await isBlacklisted(guild.id, targetUser.id);
+    if (!entry) {
+      await reply(
+        interaction,
+        new EmbedBuilder().setColor(COLOR_SUCCESS).setDescription(`✅ **${targetUser.tag}** n'est pas dans la blacklist.`),
+        true,
+      );
+      return;
+    }
+    await reply(
+      interaction,
+      new EmbedBuilder()
+        .setColor(COLOR_DANGER)
+        .setTitle("🚫 Utilisateur blacklisté")
+        .addFields(
+          { name: "Utilisateur", value: `${entry.username} (\`${entry.userId}\`)`, inline: true },
+          { name: "Raison", value: entry.reason, inline: true },
+          { name: "Blacklisté par", value: `<@${entry.moderatorId}>`, inline: true },
+          { name: "Date", value: `<t:${Math.floor(entry.addedAt / 1000)}:F>`, inline: true },
+        )
+        .setTimestamp(),
+      true,
+    );
+  }
 }
 
 async function handleBan(
