@@ -116,20 +116,46 @@ async function syncCommands(applicationId: string): Promise<void> {
   }
 }
 
+let presenceIndex = 0;
+
 function updatePresence(): void {
   if (!client.user) return;
-  const count = client.guilds.cache.size;
-  client.user.setPresence({
-    status: "online",
-    activities: [
-      {
-        name: `🎤 un vocal • ${count} serveur${count !== 1 ? "s" : ""}`,
-        type: ActivityType.Streaming,
-        url: "https://www.twitch.tv/louboutin",
-      },
-    ],
-  });
+  const guilds = client.guilds.cache.size;
+  const members = client.guilds.cache.reduce((acc, g) => acc + g.memberCount, 0);
+  const cmds = commandDefinitions.length;
+
+  type Activity = NonNullable<Parameters<typeof client.user.setPresence>[0]["activities"]>[number];
+  const statuses: Activity[] = [
+    {
+      name: `${members.toLocaleString("fr-FR")} membres`,
+      type: ActivityType.Watching,
+    },
+    {
+      name: `/help • ${guilds} serveur${guilds !== 1 ? "s" : ""}`,
+      type: ActivityType.Playing,
+    },
+    {
+      name: `un vocal • ${guilds} serveur${guilds !== 1 ? "s" : ""}`,
+      type: ActivityType.Streaming,
+      url: "https://www.twitch.tv/louboutin",
+    },
+    {
+      name: `${cmds} commandes`,
+      type: ActivityType.Playing,
+    },
+    {
+      name: `la modération`,
+      type: ActivityType.Watching,
+    },
+  ];
+
+  const activity = statuses[presenceIndex % statuses.length]!;
+  presenceIndex++;
+
+  client.user.setPresence({ status: "online", activities: [activity] });
 }
+
+setInterval(() => updatePresence(), 30_000).unref();
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag} (id: ${c.user.id})`);
