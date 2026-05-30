@@ -3396,7 +3396,7 @@ async function handleUnbl(
 async function handleBlList(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply();
 
   const guild = interaction.guild!;
   const entries = await getBlacklist(guild.id);
