@@ -5523,14 +5523,24 @@ async function handleDmAll(
   let sent = 0;
   let failed = 0;
 
-  for (const [, member] of targets) {
-    try {
-      await member.send({ embeds: [dmEmbed], components: dmComponents });
-      sent++;
-    } catch {
-      failed++;
+  const memberList = [...targets.values()];
+  const BATCH_SIZE = 5;
+  const BATCH_DELAY = 500;
+
+  for (let i = 0; i < memberList.length; i += BATCH_SIZE) {
+    const batch = memberList.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map((member) =>
+        member.send({ embeds: [dmEmbed], components: dmComponents }),
+      ),
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled") sent++;
+      else failed++;
     }
-    await new Promise((r) => setTimeout(r, 600));
+    if (i + BATCH_SIZE < memberList.length) {
+      await new Promise((r) => setTimeout(r, BATCH_DELAY));
+    }
   }
 
   await interaction.editReply({
