@@ -65,6 +65,13 @@ async function ensureLoaded(): Promise<LevelsDb> {
       throw err;
     }
   }
+  // Resync entry.level from XP on load to fix any stale values
+  // (prevents false level-up announcements after a restart)
+  for (const guild of Object.values(cache.users)) {
+    for (const entry of Object.values(guild)) {
+      entry.level = levelFromXp(entry.xp);
+    }
+  }
   return cache;
 }
 
