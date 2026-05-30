@@ -337,13 +337,16 @@ client.on(Events.MessageCreate, async (message) => {
 
   const result = checkSpam(message);
 
-  if (toxicityEnabled && message.content.trim().length > 0) {
+  if (result.isSpam) {
+    // Anti-spam prend la main — on ne lance pas la toxicité pour éviter les doubles avertissements
+  } else if (toxicityEnabled && message.content.trim().length > 0) {
     void handleToxicity(message).catch((err) =>
       console.error("Toxicity handler failed:", err),
     );
+    return;
+  } else {
+    return;
   }
-
-  if (!result.isSpam) return;
 
   const reasonText =
     result.reason === "rate"

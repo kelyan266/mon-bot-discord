@@ -20,6 +20,11 @@
     "1456371910660063584": {
       "automodEnabled": false,
       "xpEnabled": false
+    },
+    "1499804920604393663": {
+      "automodEnabled": false,
+      "xpEnabled": true,
+      "botRoleIds": []
     }
   }
 }
