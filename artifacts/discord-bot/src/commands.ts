@@ -591,6 +591,20 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
           required: false,
           max_length: 100,
         },
+        {
+          name: "lien",
+          description: "Lien Discord (ou autre URL) affiché en bouton cliquable dans le DM",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+          max_length: 512,
+        },
+        {
+          name: "label_lien",
+          description: "Texte du bouton (défaut : « Rejoindre le serveur »)",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+          max_length: 80,
+        },
       ],
     },
     {
@@ -5432,8 +5446,26 @@ async function handleDmAll(
   const text = interaction.options.getString("message", true);
   const role = interaction.options.getRole("role");
   const titre = interaction.options.getString("titre") ?? undefined;
+  const lien = interaction.options.getString("lien") ?? undefined;
+  const labelLien = interaction.options.getString("label_lien") ?? "Rejoindre le serveur";
 
   await interaction.deferReply({ ephemeral: true });
+
+  if (lien) {
+    try {
+      new URL(lien);
+    } catch {
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(COLOR_DANGER)
+            .setTitle("❌ Lien invalide")
+            .setDescription("Le lien fourni n'est pas une URL valide."),
+        ],
+      });
+      return;
+    }
+  }
 
   await guild.members.fetch();
   const targets = guild.members.cache.filter(
@@ -5467,6 +5499,18 @@ async function handleDmAll(
 
   if (titre) dmEmbed.setTitle(titre);
 
+  const dmComponents = lien
+    ? [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setLabel(labelLien)
+            .setURL(lien)
+            .setStyle(ButtonStyle.Link)
+            .setEmoji("🔗"),
+        ),
+      ]
+    : [];
+
   await interaction.editReply({
     embeds: [
       new EmbedBuilder()
@@ -5481,7 +5525,7 @@ async function handleDmAll(
 
   for (const [, member] of targets) {
     try {
-      await member.send({ embeds: [dmEmbed] });
+      await member.send({ embeds: [dmEmbed], components: dmComponents });
       sent++;
     } catch {
       failed++;
@@ -6491,7 +6535,7 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/announce <message> [salon] [embed]", value: "Annonce @everyone (option embed stylé)", inline: false },
           { name: "/embed <message> [titre] [couleur]", value: "Annonce en embed personnalisé", inline: false },
           { name: "/dm <user> <message>", value: "Envoyer un message privé via le bot", inline: false },
-          { name: "/dmall <message> [role] [titre]", value: "Envoyer un DM à tous les membres (ou à un rôle précis) — ⚠️ Administrateur", inline: false },
+          { name: "/dmall <message> [role] [titre] [lien] [label_lien]", value: "Envoyer un DM à tous les membres (ou à un rôle précis) avec bouton de lien optionnel — ⚠️ Administrateur", inline: false },
           { name: "/partenariat <partenaire> <message> [lien] [image] [logo] [salon]", value: "Publier une annonce de partenariat formatée avec embed doré", inline: false },
         )
         .setTimestamp(),

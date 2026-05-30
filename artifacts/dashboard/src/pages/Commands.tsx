@@ -787,14 +787,16 @@ const CATEGORIES: Category[] = [
       },
       {
         name: "/dmall",
-        usage: "/dmall <message> [role] [titre]",
+        usage: "/dmall <message> [role] [titre] [lien] [label_lien]",
         description: "Envoyer un message privé à tous les membres du serveur (ou à un rôle).",
-        details: "Le bot envoie un embed à chaque membre humain. Un délai est appliqué entre chaque envoi pour éviter les rate-limits Discord. Les membres avec les DM fermés sont comptés dans les échecs. Un résumé (envoyés / échoués) est affiché à la fin.",
+        details: "Le bot envoie un embed à chaque membre humain. Un délai est appliqué entre chaque envoi pour éviter les rate-limits Discord. Les membres avec les DM fermés sont comptés dans les échecs. Un résumé (envoyés / échoués) est affiché à la fin. Le lien s'affiche en bouton cliquable sous l'embed.",
         permissions: "Administrateur",
         options: [
-          { name: "message", description: "Contenu du message (variables \\n pour saut de ligne)", required: true },
+          { name: "message", description: "Contenu du message (\\n pour saut de ligne)", required: true },
           { name: "role", description: "Restreindre l'envoi aux membres ayant ce rôle", required: false },
-          { name: "titre", description: "Titre de l'embed (optionnel)", required: false },
+          { name: "titre", description: "Titre de l'embed", required: false },
+          { name: "lien", description: "URL affichée en bouton cliquable (ex: lien d'invitation Discord)", required: false },
+          { name: "label_lien", description: "Texte du bouton (défaut : « Rejoindre le serveur »)", required: false },
         ],
       },
       {
