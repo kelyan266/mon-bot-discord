@@ -117,7 +117,9 @@ export async function addMessageXp(
   const gained =
     Math.floor(Math.random() * (MESSAGE_XP_MAX - MESSAGE_XP_MIN + 1)) +
     MESSAGE_XP_MIN;
-  return applyXp(entry, gained);
+  const result = applyXp(entry, gained);
+  if (result.leveledUp) await flush();
+  return result;
 }
 
 export async function addVoiceXp(
@@ -127,7 +129,9 @@ export async function addVoiceXp(
   const db = await ensureLoaded();
   const entry = getEntry(db, guildId, userId);
   entry.voiceMinutes = (entry.voiceMinutes ?? 0) + 1;
-  return applyXp(entry, VOICE_XP_PER_TICK);
+  const result = applyXp(entry, VOICE_XP_PER_TICK);
+  if (result.leveledUp) await flush();
+  return result;
 }
 
 function applyXp(entry: LevelEntry, gained: number): XpGainResult {
