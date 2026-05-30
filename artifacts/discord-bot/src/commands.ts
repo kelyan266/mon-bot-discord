@@ -263,6 +263,26 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "unbl",
+      description: "Retirer un utilisateur de la blacklist (+ unban)",
+      default_member_permissions: PermissionFlagsBits.BanMembers.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "user_id",
+          description: "ID de l'utilisateur à retirer",
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "bllist",
+      description: "Voir tous les utilisateurs blacklistés du serveur",
+      default_member_permissions: PermissionFlagsBits.BanMembers.toString(),
+      dm_permission: false,
+    },
+    {
       name: "ban",
       description: "Ban a member from the server",
       default_member_permissions: PermissionFlagsBits.BanMembers.toString(),
@@ -2764,6 +2784,10 @@ export async function handleInteraction(
       return handleKick(interaction);
     case "bl":
       return handleBl(interaction);
+    case "unbl":
+      return handleUnbl(interaction);
+    case "bllist":
+      return handleBlList(interaction);
     case "ban":
       return handleBan(interaction);
     case "unban":
@@ -3334,6 +3358,72 @@ async function handleBl(
         .setTimestamp(),
     ],
   });
+}
+
+async function handleUnbl(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const userId = interaction.options.getString("user_id", true).trim();
+
+  await interaction.deferReply({ ephemeral: true });
+
+  const removed = await removeFromBlacklist(guild.id, userId);
+  if (!removed) {
+    await interaction.editReply({
+      embeds: [new EmbedBuilder().setColor(COLOR_WARN).setDescription(`⚠️ L'utilisateur \`${userId}\` n'est pas dans la blacklist.`)],
+    });
+    return;
+  }
+
+  try {
+    await guild.members.unban(userId, `[UnBL] ${interaction.user.tag}`);
+  } catch {
+    // Might not be banned
+  }
+
+  await interaction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLOR_SUCCESS)
+        .setTitle("✅ Retiré de la blacklist")
+        .setDescription(`\`${userId}\` a été retiré de la blacklist et unban.`)
+        .setTimestamp(),
+    ],
+  });
+}
+
+async function handleBlList(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const guild = interaction.guild!;
+  const entries = await getBlacklist(guild.id);
+
+  if (entries.length === 0) {
+    await reply(interaction, new EmbedBuilder().setColor(COLOR_SUCCESS).setDescription("✅ La blacklist est vide."), true);
+    return;
+  }
+
+  const lines = entries.map(
+    (e, i) =>
+      `**${i + 1}.** ${e.username} (\`${e.userId}\`)\n└ ${e.reason} — <@${e.moderatorId}> • <t:${Math.floor(e.addedAt / 1000)}:d>`,
+  );
+
+  let description = "";
+  for (const line of lines) {
+    if ((description + "\n\n" + line).length > 3900) break;
+    description = description ? description + "\n\n" + line : line;
+  }
+
+  await reply(
+    interaction,
+    new EmbedBuilder()
+      .setColor(COLOR_DANGER)
+      .setTitle(`🚫 Blacklist — ${guild.name} (${entries.length})`)
+      .setDescription(description)
+      .setTimestamp(),
+    true,
+  );
 }
 
 async function handleBan(
