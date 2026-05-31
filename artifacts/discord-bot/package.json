@@ -12,10 +12,12 @@
   "dependencies": {
     "@replit/object-storage": "^1.0.0",
     "discord.js": "^14.26.3",
-    "openai": "^6.34.0"
+    "openai": "^6.34.0",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/pg": "^8.18.0",
     "tsx": "catalog:"
   }
 }
