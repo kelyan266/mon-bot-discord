@@ -5,12 +5,23 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
-const STORAGE_ENABLED = !!process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+const BUCKET_ID = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+const STORAGE_ENABLED = !!BUCKET_ID;
+const LOAD_TIMEOUT_MS = 2000;
 
 let client: Client | null = null;
 function getClient(): Client {
-  if (!client) client = new Client();
+  if (!client) client = new Client(BUCKET_ID ? { bucketId: BUCKET_ID } : {});
   return client;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Object Storage timeout after ${ms}ms`)), ms),
+    ),
+  ]);
 }
 
 export async function loadJson<T>(filename: string, fallback: T): Promise<T> {
@@ -22,7 +33,7 @@ export async function loadJson<T>(filename: string, fallback: T): Promise<T> {
     if (STORAGE_ENABLED) {
       void getClient()
         .uploadFromText(`bot-data/${filename}`, text)
-        .catch((err) => console.error(`[persist] Initial sync failed for ${filename}:`, err));
+        .catch((err) => console.error(`[persist] Initial sync failed for ${filename}:`, (err as Error).message));
     }
     return data;
   } catch (err) {
@@ -31,7 +42,10 @@ export async function loadJson<T>(filename: string, fallback: T): Promise<T> {
 
   if (STORAGE_ENABLED) {
     try {
-      const result = await getClient().downloadAsText(`bot-data/${filename}`);
+      const result = await withTimeout(
+        getClient().downloadAsText(`bot-data/${filename}`),
+        LOAD_TIMEOUT_MS,
+      );
       if (result.ok && result.value) {
         const data = JSON.parse(result.value) as T;
         await fs.mkdir(DATA_DIR, { recursive: true });
@@ -40,7 +54,7 @@ export async function loadJson<T>(filename: string, fallback: T): Promise<T> {
         return data;
       }
     } catch (err) {
-      console.error(`[persist] Object Storage load failed for ${filename}:`, err);
+      console.error(`[persist] Object Storage load failed for ${filename}:`, (err as Error).message);
     }
   }
 
@@ -58,8 +72,8 @@ export async function saveJson<T>(filename: string, data: T): Promise<void> {
     void getClient()
       .uploadFromText(`bot-data/${filename}`, snapshot)
       .then((r) => {
-        if (!r.ok) console.error(`[persist] Object Storage upload failed for ${filename}:`, r.error);
+        if (!r.ok) console.error(`[persist] Upload failed for ${filename}:`, r.error);
       })
-      .catch((err) => console.error(`[persist] Object Storage upload error for ${filename}:`, err));
+      .catch((err) => console.error(`[persist] Upload error for ${filename}:`, (err as Error).message));
   }
 }
