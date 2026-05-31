@@ -1,10 +1,4 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "data");
-const FILE = path.join(DATA_DIR, "quotes.json");
+import { loadJson, saveJson } from "./persist.js";
 
 export interface Quote {
   id: number;
@@ -24,32 +18,16 @@ interface QuotesDb {
 }
 
 let cache: QuotesDb | null = null;
-let writeLock: Promise<void> = Promise.resolve();
 
 async function ensureLoaded(): Promise<QuotesDb> {
   if (cache) return cache;
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const text = await fs.readFile(FILE, "utf8");
-    cache = JSON.parse(text) as QuotesDb;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      cache = { guilds: {} };
-    } else {
-      throw err;
-    }
-  }
+  cache = await loadJson<QuotesDb>("quotes.json", { guilds: {} });
   return cache;
 }
 
 async function persist(): Promise<void> {
   if (!cache) return;
-  const snapshot = JSON.stringify(cache, null, 2);
-  writeLock = writeLock.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(FILE, snapshot, "utf8");
-  });
-  await writeLock;
+  await saveJson("quotes.json", cache);
 }
 
 function getGuild(db: QuotesDb, guildId: string): GuildQuotes {

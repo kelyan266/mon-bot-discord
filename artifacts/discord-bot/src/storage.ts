@@ -1,11 +1,4 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "data");
-const WARNINGS_FILE = path.join(DATA_DIR, "warnings.json");
-const AUTO_ROLES_FILE = path.join(DATA_DIR, "autoRoles.json");
+import { loadJson, saveJson } from "./persist.js";
 
 export interface WarningRecord {
   id: string;
@@ -25,35 +18,17 @@ interface AutoRolesDb {
 }
 
 let cache: WarningsDb | null = null;
-let writeLock: Promise<void> = Promise.resolve();
 let autoRolesCache: AutoRolesDb | null = null;
-let autoRolesWriteLock: Promise<void> = Promise.resolve();
 
 async function ensureLoaded(): Promise<WarningsDb> {
   if (cache) return cache;
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const text = await fs.readFile(WARNINGS_FILE, "utf8");
-    cache = JSON.parse(text) as WarningsDb;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      cache = { warnings: [] };
-      await persist();
-    } else {
-      throw err;
-    }
-  }
-  return cache!;
+  cache = await loadJson<WarningsDb>("warnings.json", { warnings: [] });
+  return cache;
 }
 
 async function persist(): Promise<void> {
   if (!cache) return;
-  const snapshot = JSON.stringify(cache, null, 2);
-  writeLock = writeLock.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(WARNINGS_FILE, snapshot, "utf8");
-  });
-  await writeLock;
+  await saveJson("warnings.json", cache);
 }
 
 export async function addWarning(
@@ -96,29 +71,13 @@ export async function clearWarnings(
 
 async function ensureAutoRolesLoaded(): Promise<AutoRolesDb> {
   if (autoRolesCache) return autoRolesCache;
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const text = await fs.readFile(AUTO_ROLES_FILE, "utf8");
-    autoRolesCache = JSON.parse(text) as AutoRolesDb;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      autoRolesCache = { roles: {} };
-      await persistAutoRoles();
-    } else {
-      throw err;
-    }
-  }
-  return autoRolesCache!;
+  autoRolesCache = await loadJson<AutoRolesDb>("autoRoles.json", { roles: {} });
+  return autoRolesCache;
 }
 
 async function persistAutoRoles(): Promise<void> {
   if (!autoRolesCache) return;
-  const snapshot = JSON.stringify(autoRolesCache, null, 2);
-  autoRolesWriteLock = autoRolesWriteLock.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(AUTO_ROLES_FILE, snapshot, "utf8");
-  });
-  await autoRolesWriteLock;
+  await saveJson("autoRoles.json", autoRolesCache);
 }
 
 export async function getAutoRole(guildId: string): Promise<string | null> {

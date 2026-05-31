@@ -1,16 +1,10 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { loadJson, saveJson } from "./persist.js";
 import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
 } from "discord.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "data");
-const FILE = path.join(DATA_DIR, "polls.json");
 
 export interface Poll {
   id: string;
@@ -30,32 +24,16 @@ interface PollsDb {
 }
 
 let cache: PollsDb | null = null;
-let writeLock: Promise<void> = Promise.resolve();
 
 async function ensureLoaded(): Promise<PollsDb> {
   if (cache) return cache;
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const text = await fs.readFile(FILE, "utf8");
-    cache = JSON.parse(text) as PollsDb;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      cache = { polls: {} };
-    } else {
-      throw err;
-    }
-  }
+  cache = await loadJson<PollsDb>("polls.json", { polls: {} });
   return cache;
 }
 
 async function persist(): Promise<void> {
   if (!cache) return;
-  const snapshot = JSON.stringify(cache, null, 2);
-  writeLock = writeLock.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(FILE, snapshot, "utf8");
-  });
-  await writeLock;
+  await saveJson("polls.json", cache);
 }
 
 function randomId(): string {

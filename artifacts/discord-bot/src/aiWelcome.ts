@@ -1,11 +1,5 @@
 import OpenAI from "openai";
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "data");
-const FILE = path.join(DATA_DIR, "aiWelcome.json");
+import { loadJson, saveJson } from "./persist.js";
 
 const baseURL = process.env["AI_INTEGRATIONS_OPENAI_BASE_URL"];
 const apiKey = process.env["AI_INTEGRATIONS_OPENAI_API_KEY"];
@@ -23,33 +17,16 @@ export interface WelcomeConfig {
 type WelcomeDb = Record<string, WelcomeConfig>;
 
 let dbCache: WelcomeDb | null = null;
-let writeLock: Promise<void> = Promise.resolve();
 
 async function load(): Promise<WelcomeDb> {
   if (dbCache) return dbCache;
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const text = await fs.readFile(FILE, "utf8");
-    dbCache = JSON.parse(text) as WelcomeDb;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      dbCache = {};
-      await persist();
-    } else {
-      throw err;
-    }
-  }
-  return dbCache!;
+  dbCache = await loadJson<WelcomeDb>("aiWelcome.json", {});
+  return dbCache;
 }
 
 async function persist(): Promise<void> {
   if (!dbCache) return;
-  const snapshot = JSON.stringify(dbCache, null, 2);
-  writeLock = writeLock.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(FILE, snapshot, "utf8");
-  });
-  await writeLock;
+  await saveJson("aiWelcome.json", dbCache);
 }
 
 export async function getWelcomeConfig(

@@ -1,10 +1,4 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "data");
-const LEVELS_FILE = path.join(DATA_DIR, "levels.json");
+import { loadJson, saveJson } from "./persist.js";
 
 const MESSAGE_COOLDOWN_MS = 60_000;
 const MESSAGE_XP_MIN = 15;
@@ -26,7 +20,6 @@ interface LevelsDb {
 
 let cache: LevelsDb | null = null;
 let dirty = false;
-let writeLock: Promise<void> = Promise.resolve();
 
 export function xpForLevel(level: number): number {
   let total = 0;
@@ -54,19 +47,7 @@ export function levelFromXp(xp: number): number {
 
 async function ensureLoaded(): Promise<LevelsDb> {
   if (cache) return cache;
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const text = await fs.readFile(LEVELS_FILE, "utf8");
-    cache = JSON.parse(text) as LevelsDb;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      cache = { users: {} };
-    } else {
-      throw err;
-    }
-  }
-  // Resync entry.level from XP on load to fix any stale values
-  // (prevents false level-up announcements after a restart)
+  cache = await loadJson<LevelsDb>("levels.json", { users: {} });
   for (const guild of Object.values(cache.users)) {
     for (const entry of Object.values(guild)) {
       entry.level = levelFromXp(entry.xp);
@@ -78,12 +59,7 @@ async function ensureLoaded(): Promise<LevelsDb> {
 async function flush(): Promise<void> {
   if (!cache || !dirty) return;
   dirty = false;
-  const snapshot = JSON.stringify(cache);
-  writeLock = writeLock.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(LEVELS_FILE, snapshot, "utf8");
-  });
-  await writeLock;
+  await saveJson("levels.json", cache);
 }
 
 setInterval(() => {

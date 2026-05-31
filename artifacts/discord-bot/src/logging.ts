@@ -1,6 +1,4 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { loadJson, saveJson } from "./persist.js";
 import {
   AuditLogEvent,
   EmbedBuilder,
@@ -13,10 +11,6 @@ import {
   type VoiceState,
   type Guild,
 } from "discord.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "data");
-const FILE = path.join(DATA_DIR, "logging.json");
 
 // ──────────────────────────────────────────────
 // Config
@@ -39,31 +33,16 @@ const DEFAULT: LoggingConfig = {
 type LoggingDb = Record<string, LoggingConfig>;
 
 let cache: LoggingDb | null = null;
-let writeLock: Promise<void> = Promise.resolve();
 
 async function load(): Promise<LoggingDb> {
   if (cache) return cache;
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const text = await fs.readFile(FILE, "utf8");
-    cache = JSON.parse(text) as LoggingDb;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      cache = {};
-      await persist();
-    } else throw err;
-  }
-  return cache!;
+  cache = await loadJson<LoggingDb>("logging.json", {});
+  return cache;
 }
 
 async function persist(): Promise<void> {
   if (!cache) return;
-  const snap = JSON.stringify(cache, null, 2);
-  writeLock = writeLock.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(FILE, snap, "utf8");
-  });
-  await writeLock;
+  await saveJson("logging.json", cache);
 }
 
 export async function getLoggingConfig(guildId: string): Promise<LoggingConfig> {

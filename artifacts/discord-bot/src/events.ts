@@ -1,12 +1,6 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { loadJson, saveJson } from "./persist.js";
 import type { Client, TextChannel } from "discord.js";
 import { EmbedBuilder } from "discord.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "data");
-const FILE = path.join(DATA_DIR, "events.json");
 
 export interface EventRecord {
   id: string;
@@ -26,31 +20,16 @@ export interface EventRecord {
 type EventsDb = Record<string, EventRecord>;
 
 let cache: EventsDb | null = null;
-let writeLock: Promise<void> = Promise.resolve();
 
 async function load(): Promise<EventsDb> {
   if (cache) return cache;
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const text = await fs.readFile(FILE, "utf8");
-    cache = JSON.parse(text) as EventsDb;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      cache = {};
-      await persist();
-    } else throw err;
-  }
-  return cache!;
+  cache = await loadJson<EventsDb>("events.json", {});
+  return cache;
 }
 
 async function persist(): Promise<void> {
   if (!cache) return;
-  const snap = JSON.stringify(cache, null, 2);
-  writeLock = writeLock.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(FILE, snap, "utf8");
-  });
-  await writeLock;
+  await saveJson("events.json", cache);
 }
 
 function generateId(): string {

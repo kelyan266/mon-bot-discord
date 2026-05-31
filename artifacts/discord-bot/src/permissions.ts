@@ -1,12 +1,6 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { loadJson, saveJson } from "./persist.js";
 import type { GuildMember } from "discord.js";
 import { PermissionFlagsBits } from "discord.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "data");
-const FILE = path.join(DATA_DIR, "permissions.json");
 
 // ──────────────────────────────────────────────
 // Category definitions
@@ -74,32 +68,16 @@ export interface CategoryPerms {
 type PermDb = Record<string, Record<string, CategoryPerms>>;
 
 let cache: PermDb | null = null;
-let writeLock: Promise<void> = Promise.resolve();
 
 async function ensureLoaded(): Promise<PermDb> {
   if (cache) return cache;
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const text = await fs.readFile(FILE, "utf8");
-    cache = JSON.parse(text) as PermDb;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      cache = {};
-    } else {
-      throw err;
-    }
-  }
+  cache = await loadJson<PermDb>("permissions.json", {});
   return cache;
 }
 
 async function persist(): Promise<void> {
   if (!cache) return;
-  const snapshot = JSON.stringify(cache, null, 2);
-  writeLock = writeLock.then(async () => {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(FILE, snapshot, "utf8");
-  });
-  await writeLock;
+  await saveJson("permissions.json", cache);
 }
 
 function getEntry(db: PermDb, guildId: string, categoryId: string): CategoryPerms {
