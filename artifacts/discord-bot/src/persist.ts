@@ -12,7 +12,10 @@ let dbReady = false;
 
 async function getPool(): Promise<pg.Pool> {
   if (!pool) {
-    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    pool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
     await pool.query(`
       CREATE TABLE IF NOT EXISTS bot_data (
         key TEXT PRIMARY KEY,
