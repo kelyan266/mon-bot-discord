@@ -46,11 +46,30 @@ async function getPool(): Promise<pg.Pool> {
   return pool;
 }
 
-// Kick off DB init at startup — if it fails, pool stays null and retries on next use
-if (DB_ENABLED) {
-  getPool().catch((err: unknown) =>
-    console.error("[persist] DB init failed:", (err as Error).message),
-  );
+/**
+ * Called once at startup (before client.login).
+ * Restores every saved file from DB → local disk so all subsequent
+ * loadJson calls hit the fast local-file path and never block commands.
+ */
+export async function restoreAllFromDb(): Promise<void> {
+  if (!DB_ENABLED) return;
+  try {
+    const db = await getPool(); // up to 15 s — fine at startup
+    const result = await db.query<{ key: string; value: string }>(
+      "SELECT key, value FROM bot_data",
+    );
+    if (result.rows.length === 0) {
+      console.log("[persist] DB is empty — starting fresh");
+      return;
+    }
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    for (const row of result.rows) {
+      await fs.writeFile(path.join(DATA_DIR, row.key), row.value, "utf8");
+    }
+    console.log(`[persist] Restored ${result.rows.length} file(s) from DB`);
+  } catch (err) {
+    console.error("[persist] DB restore failed:", (err as Error).message);
+  }
 }
 
 export async function loadJson<T>(filename: string, fallback: T): Promise<T> {

@@ -50,6 +50,7 @@ import {
 } from "./logging.js";
 import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
+import { restoreAllFromDb } from "./persist.js";
 import { getRolesUpToLevel } from "./levelRoles.js";
 import { isAutomodEnabled, isXpEnabled } from "./settings.js";
 import {
@@ -794,7 +795,12 @@ process.on("SIGINT", () => {
   client.destroy().finally(() => process.exit(0));
 });
 
-client.login(token).catch((err) => {
-  console.error("Failed to log in to Discord:", err);
-  process.exit(1);
-});
+// Restore all persisted data from DB before the bot goes online.
+// This runs at startup (before any command is served), so the DB's
+// Neon cold-start delay only affects boot time, not command response time.
+restoreAllFromDb()
+  .then(() => client.login(token))
+  .catch((err) => {
+    console.error("Failed to log in to Discord:", err);
+    process.exit(1);
+  });
