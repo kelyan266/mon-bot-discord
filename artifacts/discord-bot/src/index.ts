@@ -50,7 +50,7 @@ import {
 } from "./logging.js";
 import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
-import { restoreAllFromDb } from "./persist.js";
+import { startRestore } from "./persist.js";
 import { getRolesUpToLevel } from "./levelRoles.js";
 import { isAutomodEnabled, isXpEnabled } from "./settings.js";
 import {
@@ -795,12 +795,12 @@ process.on("SIGINT", () => {
   client.destroy().finally(() => process.exit(0));
 });
 
-// Restore all persisted data from DB before the bot goes online.
-// This runs at startup (before any command is served), so the DB's
-// Neon cold-start delay only affects boot time, not command response time.
-restoreAllFromDb()
-  .then(() => client.login(token))
-  .catch((err) => {
-    console.error("Failed to log in to Discord:", err);
-    process.exit(1);
-  });
+// Start DB restore in the background, then log in immediately.
+// login() no longer waits for the DB — the bot goes online in ~5 s even
+// if Neon is cold. loadJson() waits up to 5 s for the restore promise
+// before reading, so data is correct once Neon wakes up.
+startRestore();
+client.login(token).catch((err) => {
+  console.error("Failed to log in to Discord:", err);
+  process.exit(1);
+});
