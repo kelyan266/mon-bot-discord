@@ -402,6 +402,32 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       ],
     },
     {
+      name: "sanction",
+      description: "Ajouter un rôle de sanction à plusieurs membres en une seule commande",
+      default_member_permissions: PermissionFlagsBits.ManageRoles.toString(),
+      dm_permission: false,
+      options: [
+        {
+          name: "role",
+          description: "Rôle à attribuer",
+          type: ApplicationCommandOptionType.Role,
+          required: true,
+        },
+        {
+          name: "membres",
+          description: "Membres à sanctionner (mentions : @user1 @user2 …)",
+          type: ApplicationCommandOptionType.String,
+          required: true,
+        },
+        {
+          name: "raison",
+          description: "Raison de la sanction",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+        },
+      ],
+    },
+    {
       name: "warn",
       description: "Issue a warning to a member",
       default_member_permissions: PermissionFlagsBits.ModerateMembers.toString(),
@@ -3238,6 +3264,8 @@ export async function handleInteraction(
       return handleInvitations(interaction);
     case "insulter":
       return handleInsulter(interaction);
+    case "sanction":
+      return handleSanction(interaction);
     default:
       await reply(
         interaction,
@@ -9053,4 +9081,145 @@ async function handleSetBanner(
       ],
     });
   }
+}
+
+async function handleSanction(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
+  const guild = interaction.guild!;
+  const role = interaction.options.getRole("role", true);
+  const membresStr = interaction.options.getString("membres", true);
+  const raison = interaction.options.getString("raison") ?? "Aucune raison fournie";
+
+  // Check bot has Manage Roles
+  const botMember = guild.members.me;
+  if (!botMember?.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription("❌ Je n'ai pas la permission **Gérer les rôles**."),
+      ],
+    });
+    return;
+  }
+
+  // Role hierarchy check: bot's highest role must be above the target role
+  const guildRole = guild.roles.cache.get(role.id);
+  if (!guildRole) {
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription("❌ Rôle introuvable."),
+      ],
+    });
+    return;
+  }
+  if (botMember.roles.highest.position <= guildRole.position) {
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription(
+            `❌ Le rôle **${guildRole.name}** est au-dessus ou au même niveau que mon rôle le plus haut — je ne peux pas l'attribuer.`,
+          ),
+      ],
+    });
+    return;
+  }
+
+  // Parse member IDs from mentions (<@123456> or <@!123456>)
+  const mentionRegex = /<@!?(\d+)>/g;
+  const ids: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = mentionRegex.exec(membresStr)) !== null) {
+    if (!ids.includes(match[1]!)) ids.push(match[1]!);
+  }
+
+  if (ids.length === 0) {
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_DANGER)
+          .setDescription(
+            "❌ Aucune mention valide détectée. Exemple : `/sanction role:@Sanction membres:@user1 @user2`",
+          ),
+      ],
+    });
+    return;
+  }
+
+  const succeeded: string[] = [];
+  const failed: { id: string; reason: string }[] = [];
+
+  for (const id of ids) {
+    try {
+      const member = await guild.members.fetch(id).catch(() => null);
+      if (!member) {
+        failed.push({ id, reason: "Membre introuvable" });
+        continue;
+      }
+      if (member.roles.cache.has(guildRole.id)) {
+        // Already has the role — count as success
+        succeeded.push(`<@${id}> *(avait déjà le rôle)*`);
+        continue;
+      }
+      await member.roles.add(guildRole, raison);
+      succeeded.push(`<@${id}>`);
+
+      // DM the member
+      try {
+        await member.send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(COLOR_WARN)
+              .setTitle(`🔴 Sanction — ${guild.name}`)
+              .setDescription(
+                `Le rôle **${guildRole.name}** t'a été attribué par un modérateur.`,
+              )
+              .addFields({ name: "Raison", value: raison })
+              .setTimestamp(),
+          ],
+        });
+      } catch {
+        /* DMs fermés */
+      }
+    } catch (err) {
+      failed.push({
+        id,
+        reason: err instanceof Error ? err.message : "Erreur inconnue",
+      });
+    }
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(failed.length === 0 ? COLOR_SUCCESS : COLOR_WARN)
+    .setTitle("🔨 Sanction appliquée")
+    .addFields(
+      { name: "Rôle attribué", value: `<@&${guildRole.id}>`, inline: true },
+      { name: "Modérateur", value: `<@${interaction.user.id}>`, inline: true },
+      { name: "Raison", value: raison, inline: false },
+    )
+    .setTimestamp();
+
+  if (succeeded.length > 0) {
+    embed.addFields({
+      name: `✅ Sanctionnés (${succeeded.length})`,
+      value: succeeded.join(", ").slice(0, 1024),
+    });
+  }
+  if (failed.length > 0) {
+    embed.addFields({
+      name: `❌ Échecs (${failed.length})`,
+      value: failed
+        .map((f) => `<@${f.id}> — ${f.reason}`)
+        .join("\n")
+        .slice(0, 1024),
+    });
+  }
+
+  await interaction.editReply({ embeds: [embed] });
 }
