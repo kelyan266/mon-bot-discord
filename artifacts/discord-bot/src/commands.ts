@@ -202,6 +202,14 @@ import {
   getTopInviters,
   resetInviteStats,
 } from "./invites.js";
+import {
+  createGiveaway,
+  endGiveaway,
+  rerollGiveaway,
+  getActiveGiveaways,
+  parseDuration,
+  formatDuration,
+} from "./giveaway.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -1149,6 +1157,78 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       name: "nowplaying",
       description: "🎶 Afficher la musique en cours",
       dm_permission: false,
+    },
+    // ── Giveaway ───────────────────────────────────────
+    {
+      name: "giveaway",
+      description: "🎉 Gérer les giveaways du serveur",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "créer",
+          description: "Lancer un nouveau giveaway",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "durée",
+              description: "Durée du giveaway (ex: 1d, 2h, 30m, 1h30m)",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "lot",
+              description: "Ce qui est mis en jeu",
+              required: true,
+            },
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "gagnants",
+              description: "Nombre de gagnants (défaut: 1)",
+              required: false,
+              min_value: 1,
+              max_value: 20,
+            },
+            {
+              type: ApplicationCommandOptionType.Channel,
+              name: "salon",
+              description: "Salon où poster le giveaway (défaut: salon actuel)",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "terminer",
+          description: "Terminer un giveaway en avance",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "message_id",
+              description: "ID du message du giveaway",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "reroll",
+          description: "Tirer de nouveaux gagnants pour un giveaway terminé",
+          options: [
+            {
+              type: ApplicationCommandOptionType.String,
+              name: "message_id",
+              description: "ID du message du giveaway",
+              required: true,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "liste",
+          description: "Voir les giveaways actifs du serveur",
+        },
+      ],
     },
     // ── Invitations ────────────────────────────────────
     {
@@ -3104,6 +3184,8 @@ export async function handleInteraction(
       return handleQueue(interaction);
     case "nowplaying":
       return handleNowPlaying(interaction);
+    case "giveaway":
+      return handleGiveawayCommand(interaction);
     case "invitations":
       return handleInvitations(interaction);
     case "insulter":
@@ -8042,6 +8124,139 @@ async function handleHack(
   for (let i = 1; i < steps.length; i++) {
     await new Promise((r) => setTimeout(r, 900 + Math.random() * 400));
     await interaction.editReply({ embeds: [buildEmbed(i, i === steps.length - 1)] });
+  }
+}
+
+async function handleGiveawayCommand(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guildId!;
+
+  // ── Gérer les permissions ──
+  const member = interaction.member;
+  const isAdmin =
+    member &&
+    "permissions" in member &&
+    (member.permissions as Readonly<import("discord.js").PermissionsBitField>).has("ManageGuild");
+
+  // ── créer ──
+  if (sub === "créer") {
+    if (!isAdmin) {
+      await interaction.reply({ content: "❌ Tu dois avoir la permission **Gérer le serveur** pour créer un giveaway.", ephemeral: true });
+      return;
+    }
+
+    const dureeStr = interaction.options.getString("durée", true);
+    const durationMs = parseDuration(dureeStr);
+    if (!durationMs) {
+      await interaction.reply({
+        content: "❌ Durée invalide. Exemples valides : `30m`, `2h`, `1d`, `1h30m`.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const lot = interaction.options.getString("lot", true);
+    const winnersCount = interaction.options.getInteger("gagnants") ?? 1;
+    const targetChannel =
+      (interaction.options.getChannel("salon") as import("discord.js").TextChannel | null) ??
+      (interaction.channel as import("discord.js").TextChannel);
+
+    if (!targetChannel || !targetChannel.isTextBased()) {
+      await interaction.reply({ content: "❌ Salon invalide.", ephemeral: true });
+      return;
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    const g = await createGiveaway(
+      targetChannel as import("discord.js").TextChannel,
+      interaction.user.id,
+      lot,
+      winnersCount,
+      durationMs,
+      interaction.client,
+    );
+
+    await interaction.editReply({
+      content: `✅ Giveaway lancé dans <#${g.channelId}> ! Se termine dans **${formatDuration(durationMs)}**.`,
+    });
+    return;
+  }
+
+  // ── terminer ──
+  if (sub === "terminer") {
+    if (!isAdmin) {
+      await interaction.reply({ content: "❌ Tu dois avoir la permission **Gérer le serveur** pour terminer un giveaway.", ephemeral: true });
+      return;
+    }
+
+    const msgId = interaction.options.getString("message_id", true).trim();
+    await interaction.deferReply({ ephemeral: true });
+
+    const g = await endGiveaway(msgId, interaction.client, true);
+    if (!g) {
+      await interaction.editReply({ content: "❌ Aucun giveaway actif trouvé avec cet ID." });
+      return;
+    }
+
+    const mention =
+      g.winners.length > 0
+        ? g.winners.map((id) => `<@${id}>`).join(", ")
+        : "aucun participant";
+    await interaction.editReply({
+      content: `✅ Giveaway **${g.prize}** terminé. Gagnant(s) : ${mention}`,
+    });
+    return;
+  }
+
+  // ── reroll ──
+  if (sub === "reroll") {
+    if (!isAdmin) {
+      await interaction.reply({ content: "❌ Tu dois avoir la permission **Gérer le serveur** pour relancer un tirage.", ephemeral: true });
+      return;
+    }
+
+    const msgId = interaction.options.getString("message_id", true).trim();
+    await interaction.deferReply({ ephemeral: true });
+
+    const g = await rerollGiveaway(msgId, interaction.client);
+    if (!g) {
+      await interaction.editReply({ content: "❌ Giveaway introuvable ou toujours en cours. Termine-le d'abord." });
+      return;
+    }
+
+    const mention =
+      g.winners.length > 0
+        ? g.winners.map((id) => `<@${id}>`).join(", ")
+        : "aucun participant";
+    await interaction.editReply({ content: `✅ Reroll effectué ! Nouveaux gagnants : ${mention}` });
+    return;
+  }
+
+  // ── liste ──
+  if (sub === "liste") {
+    const actives = await getActiveGiveaways(guildId);
+    if (!actives.length) {
+      await interaction.reply({ content: "📭 Aucun giveaway actif en ce moment.", ephemeral: true });
+      return;
+    }
+
+    const lines = actives.map((g) =>
+      `• **${g.prize}** — <#${g.channelId}> — Se termine <t:${Math.floor(g.endsAt / 1000)}:R> — ${g.participants.length} participant(s)`,
+    );
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xf1c40f)
+          .setTitle("🎉 Giveaways actifs")
+          .setDescription(lines.join("\n")),
+      ],
+      ephemeral: true,
+    });
+    return;
   }
 }
 

@@ -33,6 +33,11 @@ import {
   updateInviteCacheEntry,
   removeFromInviteCache,
 } from "./invites.js";
+import {
+  handleGiveawayButton,
+  loadAndScheduleGiveaways,
+  GIVEAWAY_BUTTON_PREFIX,
+} from "./giveaway.js";
 import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
 import { cleanupAllOrphanedTempVCs, cleanupTempVC, isHubChannel, isTempVC, registerTempVC } from "./tempvc.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
@@ -188,6 +193,9 @@ client.once(Events.ClientReady, async (c) => {
     ]).catch(() => {});
   }
 
+  // Reschedule any giveaways that were still active before the last restart
+  void loadAndScheduleGiveaways(client);
+
   // Clean up orphaned temp VCs from before last restart
   for (const guild of c.guilds.cache.values()) {
     cleanupAllOrphanedTempVCs(guild).catch((err) =>
@@ -283,6 +291,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       if (interaction.customId.startsWith("poll_")) {
         await handlePollVote(interaction);
+        return;
+      }
+      if (interaction.customId.startsWith(GIVEAWAY_BUTTON_PREFIX)) {
+        await handleGiveawayButton(interaction, client);
         return;
       }
     } catch (err) {
