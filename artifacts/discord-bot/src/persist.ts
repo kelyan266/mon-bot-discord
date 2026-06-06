@@ -25,6 +25,12 @@ async function getPool(): Promise<pg.Pool> {
     max: 3,
   });
 
+  // Prevent unhandled 'error' events from crashing the process when
+  // Neon/pg terminates idle connections between pings.
+  p.on("error", (err) => {
+    console.error("[persist] pg pool error (non-fatal):", err.message);
+  });
+
   await p.query(`
     CREATE TABLE IF NOT EXISTS bot_data (
       key TEXT PRIMARY KEY,
