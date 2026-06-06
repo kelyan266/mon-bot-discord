@@ -980,11 +980,11 @@ const CATEGORIES: Category[] = [
     commands: [
       {
         name: "/play",
-        usage: "/play <titre ou URL YouTube>",
-        description: "Rejoindre le salon vocal et lancer une musique YouTube.",
-        details: "Fonctionne avec un titre (recherche automatique) ou une URL YouTube directe. Si une piste est déjà en cours, la nouvelle est ajoutée à la file d'attente. Tu dois être dans un salon vocal.",
+        usage: "/play <titre ou URL SoundCloud>",
+        description: "Rejoindre le salon vocal et lancer une musique SoundCloud.",
+        details: "Fonctionne avec un titre (recherche automatique) ou une URL SoundCloud directe. Si une piste est déjà en cours, la nouvelle est ajoutée à la file d'attente. Tu dois être dans un salon vocal. Le bot quitte automatiquement si le salon est vide pendant 60 s.",
         options: [
-          { name: "query", description: "Titre ou URL YouTube à lire", required: true },
+          { name: "query", description: "Titre, artiste ou URL SoundCloud à lire", required: true },
         ],
       },
       {
@@ -1012,11 +1012,36 @@ const CATEGORIES: Category[] = [
         name: "/queue",
         usage: "/queue",
         description: "Afficher la file d'attente (10 premières pistes).",
+        details: "Affiche également le mode de répétition (loop) et la lecture aléatoire (shuffle) actifs, ainsi que le volume courant.",
       },
       {
         name: "/nowplaying",
         usage: "/nowplaying",
-        description: "Afficher la piste en cours de lecture avec sa durée et son thumbnail.",
+        description: "Afficher la piste en cours de lecture avec sa durée, thumbnail et volume.",
+      },
+      {
+        name: "/volume",
+        usage: "/volume <0-200>",
+        description: "Régler le volume de la musique en temps réel.",
+        details: "100 = volume normal. 200 = volume doublé (boost). 0 = muet. Le changement est appliqué immédiatement sans interruption.",
+        options: [
+          { name: "niveau", description: "Volume en % (0 = muet · 100 = normal · 200 = max)", required: true },
+        ],
+      },
+      {
+        name: "/loop",
+        usage: "/loop <off|track|queue>",
+        description: "Changer le mode de répétition.",
+        details: "• off — lecture normale sans répétition\n• track 🔂 — répète la piste actuelle indéfiniment\n• queue 🔁 — répète toute la file en boucle",
+        options: [
+          { name: "mode", description: "off / track / queue", required: true },
+        ],
+      },
+      {
+        name: "/shuffle",
+        usage: "/shuffle",
+        description: "Activer ou désactiver la lecture aléatoire.",
+        details: "En activant le shuffle, la file est immédiatement mélangée (la piste en cours reste en position 1). Désactiver le shuffle restaure l'ordre d'ajout pour les nouvelles pistes.",
       },
     ],
   },

@@ -38,6 +38,7 @@ import {
   loadAndScheduleGiveaways,
   GIVEAWAY_BUTTON_PREFIX,
 } from "./giveaway.js";
+import { checkVoiceIdle } from "./music.js";
 import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
 import { cleanupAllOrphanedTempVCs, cleanupTempVC, isHubChannel, isTempVC, registerTempVC } from "./tempvc.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
@@ -708,6 +709,11 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   void handleVoiceLog(oldState, newState, client).catch((err) =>
     console.error("Log voice failed:", err),
   );
+
+  // Auto-leave music when voice channel becomes empty
+  if (oldState.channelId && oldState.guild) {
+    checkVoiceIdle(oldState.guild.id, oldState.guild);
+  }
 
   // Auto-delete temp VC when it becomes empty
   if (oldState.channelId && oldState.channelId !== newState.channelId) {

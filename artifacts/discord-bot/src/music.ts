@@ -1,13 +1,17 @@
 /**
- * music.ts — Lecture musicale via play-dl (SoundCloud) + @discordjs/voice
+ * music.ts — Lecture musicale via SoundCloud + @discordjs/voice
  *
- * Source : SoundCloud via play-dl (HTTP natif Node.js — pas de processus externe).
- * yt-dlp était bloqué en prod car les sites audio sont filtrés au niveau réseau.
- * play-dl utilise l'API SoundCloud directement via fetch, ce qui contourne le blocage.
+ * Source : SoundCloud uniquement (YouTube/HLS CDN bloqués sur les IPs Replit prod).
+ * Stream : API SoundCloud v2 → URL progressive MP3 → ffmpeg → OggOpus → Discord.
  *
- * Architecture :
- *  - Métadonnées + stream → play.search() / play.stream()
+ * Fonctionnalités :
+ *  - File d'attente multi-serveur
+ *  - Volume 0-200%
+ *  - Loop : off | track | queue
+ *  - Shuffle
+ *  - Auto-leave si seul en vocal (60 s)
  */
+
 import { spawn } from "node:child_process";
 import play from "play-dl";
 import {
@@ -20,10 +24,13 @@ import {
   entersState,
   StreamType,
   type AudioPlayer,
+  type AudioResource,
 } from "@discordjs/voice";
 import {
   EmbedBuilder,
   type ChatInputCommandInteraction,
+  type Client,
+  type Guild,
   type GuildMember,
   type VoiceBasedChannel,
 } from "discord.js";
@@ -40,12 +47,19 @@ export interface Track {
   requestedBy: string;
 }
 
+export type LoopMode = "off" | "track" | "queue";
+
 interface GuildQueue {
   tracks: Track[];
   player: AudioPlayer;
+  currentResource: AudioResource | null;
   voiceChannelId: string;
   textChannelId: string;
   destroying: boolean;
+  volume: number;       // 0–200 (100 = normal)
+  loop: LoopMode;
+  shuffle: boolean;
+  autoLeaveTimer: ReturnType<typeof setTimeout> | null;
 }
 
 // ─────────────────────────────────────────────
@@ -54,10 +68,6 @@ interface GuildQueue {
 
 let scClientId: string | null = null;
 
-/**
- * Doit être appelé une fois au démarrage du bot (après ClientReady).
- * Récupère un client_id SoundCloud depuis le site public.
- */
 export async function initMusic(): Promise<void> {
   try {
     const clientId = await play.getFreeClientID();
@@ -65,7 +75,7 @@ export async function initMusic(): Promise<void> {
     scClientId = clientId;
     console.log("[music] SoundCloud client_id initialisé.");
   } catch (err) {
-    console.error("[music] Impossible d'initialiser le client_id SoundCloud :", (err as Error).message);
+    console.error("[music] Impossible d'initialiser SoundCloud :", (err as Error).message);
   }
 }
 
@@ -76,7 +86,7 @@ export async function initMusic(): Promise<void> {
 const queues = new Map<string, GuildQueue>();
 
 // ─────────────────────────────────────────────
-// SoundCloud progressive stream (bypasses HLS CDN)
+// SoundCloud progressive stream
 // ─────────────────────────────────────────────
 
 interface ScTranscoding {
@@ -87,10 +97,6 @@ interface ScTrackInfo {
   media?: { transcodings?: ScTranscoding[] };
 }
 
-/**
- * Bypasses play-dl's HLS stream (cf-hls-media.sndcdn.com — bloqué en prod).
- * Utilise directement l'API SoundCloud pour récupérer l'URL progressive (MP3 direct).
- */
 async function getProgressiveStreamUrl(trackPageUrl: string): Promise<string | null> {
   if (!scClientId) return null;
   try {
@@ -98,13 +104,9 @@ async function getProgressiveStreamUrl(trackPageUrl: string): Promise<string | n
       `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(trackPageUrl)}&client_id=${scClientId}`,
       { signal: AbortSignal.timeout(10_000) },
     );
-    if (!resolveRes.ok) {
-      console.error("[music] SoundCloud resolve", resolveRes.status);
-      return null;
-    }
-    const track = (await resolveRes.json()) as ScTrackInfo;
+    if (!resolveRes.ok) return null;
 
-    // Prefer progressive (direct MP3) over HLS to avoid cf-hls-media CDN
+    const track = (await resolveRes.json()) as ScTrackInfo;
     const transcodings = track.media?.transcodings ?? [];
     const progressive = transcodings.find((t) => t.format.protocol === "progressive");
     const hls = transcodings.find((t) => t.format.protocol === "hls");
@@ -116,6 +118,7 @@ async function getProgressiveStreamUrl(trackPageUrl: string): Promise<string | n
       { signal: AbortSignal.timeout(10_000) },
     );
     if (!streamRes.ok) return null;
+
     const streamData = (await streamRes.json()) as { url: string };
     return streamData.url ?? null;
   } catch (err) {
@@ -136,24 +139,14 @@ function fmtSeconds(s: number): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-/**
- * Resolve a search query or URL into a Track via play-dl (SoundCloud).
- */
 async function resolveTrack(query: string, requestedBy: string): Promise<Track | null> {
   try {
     const isUrl = /^https?:\/\//.test(query);
-
     let info: { url: string; title: string; durationInSec: number; thumbnail?: { url: string } } | null = null;
 
     if (isUrl) {
-      // Direct SoundCloud URL
-      const validated = play.yt_validate(query);
-      if (validated === "video") {
-        // YouTube URL — won't work in prod, reject early
-        return null;
-      }
+      if (play.yt_validate(query) === "video") return null; // YouTube bloqué
       const scInfo = await play.soundcloud(query);
-      // SoundCloud returns SoundCloudTrack | SoundCloudPlaylist; thumbnail only on tracks
       const thumb = "thumbnail" in scInfo && scInfo.thumbnail ? scInfo.thumbnail : undefined;
       info = {
         url: scInfo.url,
@@ -162,11 +155,7 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
         thumbnail: thumb ? { url: thumb } : undefined,
       };
     } else {
-      // Text search → SoundCloud
-      const results = await play.search(query, {
-        source: { soundcloud: "tracks" },
-        limit: 1,
-      });
+      const results = await play.search(query, { source: { soundcloud: "tracks" }, limit: 1 });
       if (!results.length) return null;
       const r = results[0]!;
       info = {
@@ -178,7 +167,6 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
     }
 
     if (!info) return null;
-
     return {
       url: info.url,
       title: info.title,
@@ -187,8 +175,57 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
       requestedBy,
     };
   } catch (err) {
-    console.error("[music] resolveTrack error:", (err as Error).message);
+    console.error("[music] resolveTrack:", (err as Error).message);
     return null;
+  }
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
+
+// ─────────────────────────────────────────────
+// Auto-leave
+// ─────────────────────────────────────────────
+
+function clearAutoLeave(q: GuildQueue): void {
+  if (q.autoLeaveTimer) {
+    clearTimeout(q.autoLeaveTimer);
+    q.autoLeaveTimer = null;
+  }
+}
+
+function scheduleAutoLeave(guildId: string, delayMs = 60_000): void {
+  const q = queues.get(guildId);
+  if (!q) return;
+  clearAutoLeave(q);
+  q.autoLeaveTimer = setTimeout(() => {
+    const current = queues.get(guildId);
+    if (current && current.tracks.length === 0) {
+      destroyQueue(guildId);
+    }
+  }, delayMs);
+}
+
+/** Call from VoiceStateUpdate — leaves if bot is alone in the channel. */
+export function checkVoiceIdle(guildId: string, guild: Guild): void {
+  const q = queues.get(guildId);
+  if (!q) return;
+
+  const channel = guild.channels.cache.get(q.voiceChannelId);
+  if (!channel || !channel.isVoiceBased()) return;
+
+  const humans = channel.members.filter((m) => !m.user.bot).size;
+  if (humans === 0) {
+    scheduleAutoLeave(guildId, 60_000);
+  } else {
+    const current = queues.get(guildId);
+    if (current) clearAutoLeave(current);
   }
 }
 
@@ -199,14 +236,13 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
 async function playNext(guildId: string): Promise<void> {
   const q = queues.get(guildId);
   if (!q || q.tracks.length === 0) {
-    destroyQueue(guildId);
+    scheduleAutoLeave(guildId, 60_000);
     return;
   }
 
   const track = q.tracks[0]!;
 
   try {
-    // Use direct SoundCloud API (progressive MP3) + ffmpeg to bypass HLS CDN block
     const streamUrl = await getProgressiveStreamUrl(track.url);
     if (!streamUrl) throw new Error("Impossible de récupérer l'URL de stream SoundCloud.");
 
@@ -226,8 +262,11 @@ async function playNext(guildId: string): Promise<void> {
 
     proc.stderr?.on("data", (d: Buffer) => {
       const msg = d.toString().trim();
-      if (msg && !msg.startsWith("size=") && !msg.startsWith("frame=")) {
-        console.error("[music] ffmpeg:", msg);
+      if (msg && !msg.startsWith("size=") && !msg.startsWith("frame=") && !msg.startsWith("Output")) {
+        // Only log errors, not progress
+        if (msg.includes("Error") || msg.includes("error") || msg.includes("Invalid")) {
+          console.error("[music] ffmpeg:", msg);
+        }
       }
     });
 
@@ -241,7 +280,11 @@ async function playNext(guildId: string): Promise<void> {
 
     const resource = createAudioResource(proc.stdout!, {
       inputType: StreamType.OggOpus,
+      inlineVolume: true,
     });
+    // Apply stored volume (100 = 1.0 = normal)
+    resource.volume?.setVolume(q.volume / 100);
+    q.currentResource = resource;
     q.player.play(resource);
   } catch (err) {
     console.error("[music] playNext error:", (err as Error).message);
@@ -254,6 +297,7 @@ function destroyQueue(guildId: string): void {
   const q = queues.get(guildId);
   if (q) {
     q.destroying = true;
+    clearAutoLeave(q);
     q.player.stop(true);
     queues.delete(guildId);
   }
@@ -279,11 +323,11 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
   const query = interaction.options.getString("query", true);
   const guildId = interaction.guildId!;
 
-  await interaction.editReply({ content: "🔍 Recherche en cours…" });
+  await interaction.editReply({ content: "🔍 Recherche en cours sur SoundCloud…" });
   const track = await resolveTrack(query, interaction.user.username);
   if (!track) {
     await interaction.editReply({
-      content: "❌ Aucun résultat trouvé sur SoundCloud. Essaie un titre différent ou colle une URL SoundCloud directe.",
+      content: "❌ Aucun résultat sur SoundCloud. Essaie un titre différent ou colle une URL SoundCloud directe.",
     });
     return;
   }
@@ -295,7 +339,7 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
       channelId: voiceChannel.id,
       guildId,
       adapterCreator: interaction.guild!.voiceAdapterCreator,
-      selfDeaf: false,
+      selfDeaf: true,
       selfMute: false,
     });
 
@@ -313,9 +357,14 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
     q = {
       tracks: [],
       player,
+      currentResource: null,
       voiceChannelId: voiceChannel.id,
       textChannelId: interaction.channelId,
       destroying: false,
+      volume: 100,
+      loop: "off",
+      shuffle: false,
+      autoLeaveTimer: null,
     };
     queues.set(guildId, q);
 
@@ -335,7 +384,27 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
     player.on(AudioPlayerStatus.Idle, () => {
       const current = queues.get(guildId);
       if (!current || current.destroying) return;
-      current.tracks.shift();
+
+      const finished = current.tracks[0];
+
+      if (current.loop === "track" && finished) {
+        // Replay same track — keep it at position 0
+        void playNext(guildId);
+        return;
+      }
+
+      if (current.loop === "queue" && finished) {
+        // Move current to end of queue
+        current.tracks.push(current.tracks.shift()!);
+      } else {
+        current.tracks.shift();
+      }
+
+      if (current.shuffle && current.tracks.length > 1) {
+        const [next, ...rest] = current.tracks;
+        current.tracks = [next!, ...shuffleArray(rest)];
+      }
+
       void playNext(guildId);
     });
 
@@ -349,19 +418,22 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
   } else if (q.voiceChannelId !== voiceChannel.id) {
     const conn = getVoiceConnection(guildId);
     if (conn) {
-      conn.rejoin({ channelId: voiceChannel.id, selfDeaf: false, selfMute: false });
+      conn.rejoin({ channelId: voiceChannel.id, selfDeaf: true, selfMute: false });
       q.voiceChannelId = voiceChannel.id;
     }
   }
+
+  // Cancel any pending auto-leave
+  clearAutoLeave(q);
 
   q.tracks.push(track);
 
   if (q.tracks.length === 1) {
     await playNext(guildId);
-    await interaction.editReply({ embeds: [buildTrackEmbed("▶️ Lecture", track)] });
+    await interaction.editReply({ embeds: [buildTrackEmbed("▶️ Lecture", track, q)] });
   } else {
     await interaction.editReply({
-      embeds: [buildTrackEmbed(`📥 Ajouté à la file (#${q.tracks.length})`, track)],
+      embeds: [buildTrackEmbed(`📥 Ajouté à la file (#${q.tracks.length})`, track, q)],
     });
   }
 }
@@ -374,7 +446,12 @@ export async function handleSkip(interaction: ChatInputCommandInteraction): Prom
     return;
   }
   const skipped = q.tracks[0]!.title;
+  // Override loop for manual skip — always advance
   q.tracks.shift();
+  if (q.shuffle && q.tracks.length > 1) {
+    const [next, ...rest] = q.tracks;
+    q.tracks = [next!, ...shuffleArray(rest)];
+  }
   await playNext(guildId);
   await interaction.reply({
     embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(`⏭️ **${skipped}** ignorée.`)],
@@ -440,12 +517,15 @@ export async function handleQueue(interaction: ChatInputCommandInteraction): Pro
       : `\`${i + 1}.\` ${t.title} \`${t.durationFmt}\` — *${t.requestedBy}*`,
   );
   const more = q.tracks.length > 10 ? `\n*… et ${q.tracks.length - 10} autre(s)*` : "";
+  const loopIcon = q.loop === "track" ? " 🔂" : q.loop === "queue" ? " 🔁" : "";
+  const shuffleIcon = q.shuffle ? " 🔀" : "";
   await interaction.reply({
     embeds: [
       new EmbedBuilder()
         .setColor(0x5865f2)
-        .setTitle(`🎵 File d'attente (${q.tracks.length} piste${q.tracks.length > 1 ? "s" : ""})`)
-        .setDescription(lines.join("\n") + more),
+        .setTitle(`🎵 File d'attente (${q.tracks.length} piste${q.tracks.length > 1 ? "s" : ""})${loopIcon}${shuffleIcon}`)
+        .setDescription(lines.join("\n") + more)
+        .setFooter({ text: `Volume: ${q.volume}%` }),
     ],
   });
 }
@@ -458,14 +538,100 @@ export async function handleNowPlaying(interaction: ChatInputCommandInteraction)
     await interaction.reply({ content: "❌ Aucune musique en cours.", ephemeral: true });
     return;
   }
-  await interaction.reply({ embeds: [buildTrackEmbed("🎶 En cours", track)] });
+  await interaction.reply({ embeds: [buildTrackEmbed("🎶 En cours", track, q!)] });
+}
+
+export async function handleVolume(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId!;
+  const q = queues.get(guildId);
+  const level = interaction.options.getInteger("niveau", true);
+
+  if (!q) {
+    await interaction.reply({ content: "❌ Aucune musique en cours.", ephemeral: true });
+    return;
+  }
+
+  q.volume = level;
+  // Apply immediately to current resource
+  q.currentResource?.volume?.setVolume(level / 100);
+
+  const bar = buildVolumeBar(level);
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setDescription(`🔊 Volume : **${level}%**\n${bar}`),
+    ],
+  });
+}
+
+export async function handleLoop(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId!;
+  const q = queues.get(guildId);
+  if (!q) {
+    await interaction.reply({ content: "❌ Aucune musique en cours.", ephemeral: true });
+    return;
+  }
+
+  const mode = interaction.options.getString("mode", true) as LoopMode;
+  q.loop = mode;
+
+  const icons: Record<LoopMode, string> = {
+    off: "▶️ Lecture normale (pas de répétition)",
+    track: "🔂 Répétition de la piste actuelle",
+    queue: "🔁 Répétition de toute la file",
+  };
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setDescription(`${icons[mode]}`),
+    ],
+  });
+}
+
+export async function handleShuffle(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId!;
+  const q = queues.get(guildId);
+  if (!q) {
+    await interaction.reply({ content: "❌ Aucune musique en cours.", ephemeral: true });
+    return;
+  }
+
+  q.shuffle = !q.shuffle;
+
+  if (q.shuffle && q.tracks.length > 1) {
+    const [current, ...rest] = q.tracks;
+    q.tracks = [current!, ...shuffleArray(rest)];
+  }
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setDescription(
+          q.shuffle
+            ? "🔀 Lecture aléatoire **activée** — la file a été mélangée."
+            : "➡️ Lecture aléatoire **désactivée**.",
+        ),
+    ],
+  });
 }
 
 // ─────────────────────────────────────────────
 // Shared embed builder
 // ─────────────────────────────────────────────
 
-function buildTrackEmbed(title: string, track: Track): EmbedBuilder {
+function buildVolumeBar(level: number): string {
+  const filled = Math.round(level / 10);
+  return "█".repeat(Math.min(filled, 20)) + "░".repeat(Math.max(0, 20 - filled));
+}
+
+function buildTrackEmbed(title: string, track: Track, q: GuildQueue): EmbedBuilder {
+  const loopLabel = q.loop === "track" ? " · 🔂 Track" : q.loop === "queue" ? " · 🔁 Queue" : "";
+  const shuffleLabel = q.shuffle ? " · 🔀 Shuffle" : "";
+
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle(title)
@@ -473,7 +639,10 @@ function buildTrackEmbed(title: string, track: Track): EmbedBuilder {
     .addFields(
       { name: "⏱️ Durée", value: track.durationFmt, inline: true },
       { name: "👤 Demandé par", value: track.requestedBy, inline: true },
-    );
+      { name: "🔊 Volume", value: `${q.volume}%`, inline: true },
+    )
+    .setFooter({ text: `SoundCloud${loopLabel}${shuffleLabel}` });
+
   if (track.thumbnail) embed.setThumbnail(track.thumbnail);
   return embed;
 }

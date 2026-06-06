@@ -59,13 +59,16 @@ import {
   handleSlots,
 } from "./casino.js";
 import {
+  handleLoop,
   handleNowPlaying,
   handlePause,
   handlePlay,
   handleQueue,
   handleResume,
+  handleShuffle,
   handleSkip,
   handleStop,
+  handleVolume,
   initMusic,
 } from "./music.js";
 export { initMusic };
@@ -1117,13 +1120,13 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
     // ── Musique ────────────────────────────────────────
     {
       name: "play",
-      description: "🎵 Rejoindre ton salon vocal et lancer une musique",
+      description: "🎵 Rejoindre ton salon vocal et lancer une musique SoundCloud",
       dm_permission: false,
       options: [
         {
           type: ApplicationCommandOptionType.String,
           name: "query",
-          description: "Titre, artiste ou URL YouTube",
+          description: "Titre, artiste ou URL SoundCloud",
           required: true,
         },
       ],
@@ -1156,6 +1159,44 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
     {
       name: "nowplaying",
       description: "🎶 Afficher la musique en cours",
+      dm_permission: false,
+    },
+    {
+      name: "volume",
+      description: "🔊 Régler le volume de la musique (0-200%)",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Integer,
+          name: "niveau",
+          description: "Volume en pourcentage (0 = muet, 100 = normal, 200 = max)",
+          required: true,
+          min_value: 0,
+          max_value: 200,
+        },
+      ],
+    },
+    {
+      name: "loop",
+      description: "🔁 Changer le mode de répétition",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "mode",
+          description: "Mode de répétition",
+          required: true,
+          choices: [
+            { name: "⏹️ Désactivé", value: "off" },
+            { name: "🔂 Piste actuelle", value: "track" },
+            { name: "🔁 Toute la file", value: "queue" },
+          ],
+        },
+      ],
+    },
+    {
+      name: "shuffle",
+      description: "🔀 Activer/désactiver la lecture aléatoire",
       dm_permission: false,
     },
     // ── Giveaway ───────────────────────────────────────
@@ -3184,6 +3225,12 @@ export async function handleInteraction(
       return handleQueue(interaction);
     case "nowplaying":
       return handleNowPlaying(interaction);
+    case "volume":
+      return handleVolume(interaction);
+    case "loop":
+      return handleLoop(interaction);
+    case "shuffle":
+      return handleShuffle(interaction);
     case "giveaway":
       return handleGiveawayCommand(interaction);
     case "invitations":
@@ -6750,7 +6797,7 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "🎰 Casino", value: "`/balance` · `/daily` · `/slots` · `/blackjack`…", inline: true },
           { name: "🎟️ Tickets", value: "`/ticket close` · `add` · `remove`", inline: true },
           { name: "📅 Événements", value: "`/event create` · `join` · `list` · `info`…", inline: true },
-          { name: "🎵 Musique", value: "`/play` · `/skip` · `/stop` · `/pause` · `/queue` · `/nowplaying`", inline: true },
+          { name: "🎵 Musique", value: "`/play` · `/skip` · `/stop` · `/pause` · `/queue` · `/volume` · `/loop` · `/shuffle`", inline: true },
           { name: "🎤 Activité", value: "`/activity` · `/whoisplaying` · `/spotify` · `/sessions`…", inline: true },
           { name: "🎙️ Vocal", value: "`/tempvc create` · `/tempvc rename` · `/voice lock`…", inline: true },
           { name: "📣 Annonces", value: "`/say` · `/announce` · `/mention` · `/embed`…", inline: true },
@@ -7036,22 +7083,24 @@ const HELP_PAGES: Record<string, HelpPage> = {
   musique: {
     label: "Musique",
     emoji: "🎵",
-    description: "Lecture YouTube en vocal : play, skip, stop, pause, queue…",
+    description: "Lecture SoundCloud en vocal : play, skip, volume, loop, shuffle…",
     build: () =>
       new EmbedBuilder()
         .setColor(0x5865f2)
         .setTitle("🎵 Musique")
-        .setDescription("Le bot rejoint ton salon vocal et lit de la musique YouTube.")
+        .setDescription("Le bot rejoint ton salon vocal et lit de la musique depuis **SoundCloud**.\nIl quitte automatiquement si le salon est vide pendant 60 s.")
         .addFields(
-          { name: "/play <titre ou URL YouTube>", value: "Rejoindre ton salon vocal et lancer une musique. Si une piste est déjà en cours, elle est ajoutée à la file.", inline: false },
+          { name: "/play <titre ou URL>", value: "Rejoindre ton salon vocal et lancer une musique. Si une piste est déjà en cours, elle est ajoutée à la file.", inline: false },
           { name: "/skip", value: "Passer la piste en cours et lire la suivante.", inline: false },
           { name: "/stop", value: "Stopper la lecture et quitter le salon vocal.", inline: false },
-          { name: "/pause", value: "Mettre la musique en pause.", inline: false },
-          { name: "/resume", value: "Reprendre la lecture après une pause.", inline: false },
-          { name: "/queue", value: "Afficher la file d'attente (10 premières pistes).", inline: false },
-          { name: "/nowplaying", value: "Afficher la piste en cours de lecture.", inline: false },
+          { name: "/pause / /resume", value: "Mettre la musique en pause ou reprendre.", inline: false },
+          { name: "/queue", value: "Afficher la file d'attente avec le mode loop et shuffle actifs.", inline: false },
+          { name: "/nowplaying", value: "Afficher la piste en cours (titre, durée, volume).", inline: false },
+          { name: "/volume <0-200>", value: "Régler le volume en temps réel. 100 = normal, 200 = boost max.", inline: false },
+          { name: "/loop <off|track|queue>", value: "Répéter la piste actuelle 🔂, toute la file 🔁, ou désactiver.", inline: false },
+          { name: "/shuffle", value: "Activer/désactiver la lecture aléatoire (mélange instantané de la file).", inline: false },
         )
-        .setFooter({ text: "Tu dois être dans un salon vocal pour utiliser /play." })
+        .setFooter({ text: "Tu dois être dans un salon vocal pour utiliser /play. Source : SoundCloud uniquement." })
         .setTimestamp(),
   },
 };
