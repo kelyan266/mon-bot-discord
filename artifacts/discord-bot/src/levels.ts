@@ -4,7 +4,7 @@ const MESSAGE_COOLDOWN_MS = 60_000;
 const MESSAGE_XP_MIN = 15;
 const MESSAGE_XP_MAX = 25;
 const VOICE_XP_PER_TICK = 10;
-const FLUSH_INTERVAL_MS = 30_000;
+const FLUSH_INTERVAL_MS = 5_000;
 
 export interface LevelEntry {
   xp: number;
@@ -305,6 +305,13 @@ export async function getActiveMembers24h(guildId: string): Promise<number> {
   return Object.values(guild).filter((e) => e.lastMessageAt > cutoff).length;
 }
 
-export async function shutdownFlush(): Promise<void> {
-  await flush();
+/**
+ * Flush with a hard timeout so signal handlers never hang
+ * long enough for Replit to send SIGKILL.
+ */
+export async function shutdownFlush(timeoutMs = 4_000): Promise<void> {
+  await Promise.race([
+    flush(),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
 }

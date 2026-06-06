@@ -839,19 +839,28 @@ client.on(Events.Error, (err) => {
   console.error("Discord client error:", err);
 });
 
+async function gracefulShutdown(signal: string): Promise<void> {
+  console.log(`${signal} received, flushing data...`);
+  try {
+    await shutdownFlush(4_000);
+    console.log("Flush complete.");
+  } catch (err) {
+    console.error("Final flush failed:", err);
+  }
+  try {
+    await client.destroy();
+  } catch {
+    // ignore
+  }
+  process.exit(0);
+}
+
 process.on("SIGTERM", () => {
-  console.log("SIGTERM received, shutting down...");
-  shutdownFlush()
-    .catch((err) => console.error("Final flush failed:", err))
-    .finally(() => client.destroy().finally(() => process.exit(0)));
+  void gracefulShutdown("SIGTERM");
 });
 
 process.on("SIGINT", () => {
-  console.log("SIGINT received, shutting down...");
-  void shutdownFlush().catch((err) =>
-    console.error("Final flush failed:", err),
-  );
-  client.destroy().finally(() => process.exit(0));
+  void gracefulShutdown("SIGINT");
 });
 
 // Start DB restore in the background, then log in immediately.
