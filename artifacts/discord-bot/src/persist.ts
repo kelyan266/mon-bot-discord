@@ -11,6 +11,8 @@ let pool: pg.Pool | null = null;
 
 // Holds the in-flight restore promise so loadJson can wait for it
 let restoreInProgress: Promise<void> | null = null;
+// Set to true when restore fails — loadJson skips DB fallback to avoid blocking
+let restoreFailed = false;
 
 async function getPool(): Promise<pg.Pool> {
   if (pool) return pool;
@@ -18,7 +20,7 @@ async function getPool(): Promise<pg.Pool> {
   const p = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    // No connectionTimeoutMillis — let Neon cold-start finish naturally
+    connectionTimeoutMillis: 8000,
     idleTimeoutMillis: 60000,
     max: 3,
   });
@@ -68,6 +70,7 @@ export function startRestore(): void {
       console.log(`[persist] Restored ${result.rows.length} file(s) from DB`);
     } catch (err) {
       console.error("[persist] DB restore failed:", (err as Error).message);
+      restoreFailed = true;
     } finally {
       restoreInProgress = null;
     }
@@ -77,12 +80,13 @@ export function startRestore(): void {
 export async function loadJson<T>(filename: string, fallback: T): Promise<T> {
   const localPath = path.join(DATA_DIR, filename);
 
-  // Wait for the background restore (up to 5 s) before reading
+  // Wait for the background restore — cap at 1.5 s so command handlers stay
+  // within Discord's 3-second interaction window even on cold starts.
   if (restoreInProgress) {
     try {
       await Promise.race([
         restoreInProgress,
-        new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+        new Promise<void>((resolve) => setTimeout(resolve, 1500)),
       ]);
     } catch {
       /* restore failed — proceed with whatever is available */
@@ -97,7 +101,11 @@ export async function loadJson<T>(filename: string, fallback: T): Promise<T> {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
 
-  // Fallback: try DB directly (covers edge cases, 2-s cap)
+  // If restore already failed, skip the DB round-trip — return fallback
+  // immediately so we don't burn another second blocking a command handler.
+  if (restoreFailed) return fallback;
+
+  // Fallback: try DB directly (covers edge cases where restore was skipped)
   if (DB_ENABLED) {
     try {
       const row = await Promise.race([
@@ -109,7 +117,7 @@ export async function loadJson<T>(filename: string, fallback: T): Promise<T> {
             )
             .then((r) => r.rows[0] ?? null),
         ),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1000)),
       ]);
 
       if (row) {
