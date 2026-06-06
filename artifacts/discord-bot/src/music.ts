@@ -1,13 +1,14 @@
 /**
- * music.ts — Lecture musicale via @discordjs/voice + play-dl
+ * music.ts — Lecture musicale via yt-dlp + @discordjs/voice
  *
- * Fixes vs v1:
- *  - selfDeaf/selfMute = false → plus d'icône casque
- *  - StreamType.Arbitrary → FFmpeg transcodes directement (plus fiable qu'Opus natif)
- *  - entersState(Ready) avant de jouer → connexion confirmée avant stream
- *  - Disconnect handler relancé uniquement si la queue existe encore (évite le faux-timeout de 5 s)
- *  - resolveTrack préchargé avant join → on sait qu'on a un résultat avant de rejoindre
+ * play-dl était bloqué par YouTube ("Sign in to confirm you're not a bot").
+ * yt-dlp contourne cette détection de manière fiable avec son propre client.
+ *
+ * Architecture :
+ *  - Métadonnées (titre, durée, thumbnail) → yt-dlp --print-json --no-download
+ *  - Stream audio                           → yt-dlp -o - stdout | ffmpeg → Opus
  */
+import { spawn, type ChildProcess } from "node:child_process";
 import {
   joinVoiceChannel,
   createAudioPlayer,
@@ -19,7 +20,6 @@ import {
   StreamType,
   type AudioPlayer,
 } from "@discordjs/voice";
-import play from "play-dl";
 import {
   EmbedBuilder,
   type ChatInputCommandInteraction,
@@ -45,6 +45,16 @@ interface GuildQueue {
   voiceChannelId: string;
   textChannelId: string;
   destroying: boolean;
+  currentProc?: ChildProcess;
+}
+
+interface YtDlpInfo {
+  webpage_url?: string;
+  url?: string;
+  title?: string;
+  duration?: number;
+  thumbnail?: string;
+  thumbnails?: Array<{ url: string }>;
 }
 
 // ─────────────────────────────────────────────
@@ -54,7 +64,7 @@ interface GuildQueue {
 const queues = new Map<string, GuildQueue>();
 
 // ─────────────────────────────────────────────
-// Helpers
+// yt-dlp helpers
 // ─────────────────────────────────────────────
 
 function fmtSeconds(s: number): string {
@@ -65,33 +75,82 @@ function fmtSeconds(s: number): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
+/** Fetch video metadata via yt-dlp (no download). Works for URLs and search queries. */
 async function resolveTrack(query: string, requestedBy: string): Promise<Track | null> {
-  try {
-    if (/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)/.test(query)) {
-      const info = await play.video_info(query);
-      const d = info.video_details;
-      return {
-        url: d.url,
-        title: d.title ?? "Titre inconnu",
-        durationFmt: fmtSeconds(d.durationInSec),
-        thumbnail: d.thumbnails?.[0]?.url ?? null,
-        requestedBy,
-      };
-    }
-    const results = await play.search(query, { source: { youtube: "video" }, limit: 1 });
-    const v = results[0];
-    if (!v) return null;
-    return {
-      url: v.url,
-      title: v.title ?? "Titre inconnu",
-      durationFmt: fmtSeconds(v.durationInSec ?? 0),
-      thumbnail: v.thumbnails?.[0]?.url ?? null,
-      requestedBy,
-    };
-  } catch {
-    return null;
-  }
+  return new Promise((resolve) => {
+    const isUrl = /^https?:\/\//.test(query);
+    const target = isUrl ? query : `ytsearch1:${query}`;
+
+    const args = [
+      "--print-json",
+      "--no-download",
+      "--quiet",
+      "--no-playlist",
+      target,
+    ];
+
+    const proc = spawn("yt-dlp", args);
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
+    proc.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
+
+    const timeout = setTimeout(() => {
+      proc.kill();
+      console.error("[music] yt-dlp info timeout");
+      resolve(null);
+    }, 20_000);
+
+    proc.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        console.error("[music] yt-dlp info error:", stderr.trim().split("\n")[0]);
+        resolve(null);
+        return;
+      }
+      try {
+        // yt-dlp may print multiple JSON lines for playlists; take the first
+        const firstLine = stdout.trim().split("\n")[0];
+        if (!firstLine) { resolve(null); return; }
+        const info = JSON.parse(firstLine) as YtDlpInfo;
+        const url = info.webpage_url ?? info.url ?? query;
+        const thumbnail =
+          info.thumbnail ??
+          info.thumbnails?.[info.thumbnails.length - 1]?.url ??
+          null;
+        resolve({
+          url,
+          title: info.title ?? "Titre inconnu",
+          durationFmt: fmtSeconds(info.duration ?? 0),
+          thumbnail,
+          requestedBy,
+        });
+      } catch (e) {
+        console.error("[music] yt-dlp JSON parse error:", e);
+        resolve(null);
+      }
+    });
+  });
 }
+
+/**
+ * Spawn yt-dlp to download audio to stdout.
+ * @discordjs/voice + FFmpeg (StreamType.Arbitrary) handles the transcoding.
+ */
+function spawnAudioStream(url: string): ChildProcess {
+  return spawn("yt-dlp", [
+    "-o", "-",               // output to stdout
+    "-f", "bestaudio/best",  // best audio track
+    "--quiet",
+    "--no-playlist",
+    "--no-warnings",
+    url,
+  ]);
+}
+
+// ─────────────────────────────────────────────
+// Queue management
+// ─────────────────────────────────────────────
 
 async function playNext(guildId: string): Promise<void> {
   const q = queues.get(guildId);
@@ -102,15 +161,36 @@ async function playNext(guildId: string): Promise<void> {
 
   const track = q.tracks[0]!;
 
+  // Kill any previous yt-dlp process
+  q.currentProc?.kill();
+  q.currentProc = undefined;
+
   try {
-    // StreamType.Arbitrary → FFmpeg transcode, works with any format
-    const stream = await play.stream(track.url);
-    const resource = createAudioResource(stream.stream, {
-      inputType: StreamType.Arbitrary,
+    const proc = spawnAudioStream(track.url);
+    q.currentProc = proc;
+
+    // Log yt-dlp stderr for debugging
+    proc.stderr?.on("data", (d: Buffer) => {
+      const msg = d.toString().trim();
+      if (msg) console.error("[music] yt-dlp:", msg);
     });
+
+    // If yt-dlp exits with error before the stream is consumed, skip track
+    proc.on("error", (err) => {
+      console.error("[music] yt-dlp spawn error:", err.message);
+      const current = queues.get(guildId);
+      if (!current || current.destroying) return;
+      current.tracks.shift();
+      void playNext(guildId);
+    });
+
+    const resource = createAudioResource(proc.stdout!, {
+      inputType: StreamType.Arbitrary, // FFmpeg transcodes to Opus
+    });
+
     q.player.play(resource);
   } catch (err) {
-    console.error("[music] Stream error, skipping:", (err as Error).message);
+    console.error("[music] playNext error:", (err as Error).message);
     q.tracks.shift();
     await playNext(guildId);
   }
@@ -120,6 +200,7 @@ function destroyQueue(guildId: string): void {
   const q = queues.get(guildId);
   if (q) {
     q.destroying = true;
+    q.currentProc?.kill();
     q.player.stop(true);
     queues.delete(guildId);
   }
@@ -145,10 +226,11 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
   const query = interaction.options.getString("query", true);
   const guildId = interaction.guildId!;
 
-  // Resolve track BEFORE joining so we don't connect for nothing
+  // Resolve metadata BEFORE joining voice
+  await interaction.editReply({ content: "🔍 Recherche en cours…" });
   const track = await resolveTrack(query, interaction.user.username);
   if (!track) {
-    await interaction.editReply({ content: "❌ Aucun résultat trouvé pour cette recherche." });
+    await interaction.editReply({ content: "❌ Aucun résultat trouvé (YouTube peut bloquer temporairement — réessaie dans quelques secondes)." });
     return;
   }
 
@@ -159,11 +241,10 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
       channelId: voiceChannel.id,
       guildId,
       adapterCreator: interaction.guild!.voiceAdapterCreator,
-      selfDeaf: false,   // no deafened icon
+      selfDeaf: false,
       selfMute: false,
     });
 
-    // Wait for the connection to be truly ready before playing
     try {
       await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
     } catch {
@@ -184,7 +265,7 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
     };
     queues.set(guildId, q);
 
-    // Reconnect on unexpected drops; skip if queue was intentionally stopped
+    // Reconnect on unexpected network drops
     connection.on(VoiceConnectionStatus.Disconnected, async () => {
       const current = queues.get(guildId);
       if (!current || current.destroying) return;
@@ -198,7 +279,7 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
       }
     });
 
-    // Advance queue on track end
+    // Advance queue when a track finishes
     player.on(AudioPlayerStatus.Idle, () => {
       const current = queues.get(guildId);
       if (!current || current.destroying) return;
@@ -241,6 +322,7 @@ export async function handleSkip(interaction: ChatInputCommandInteraction): Prom
     return;
   }
   const skipped = q.tracks[0]!.title;
+  q.currentProc?.kill();
   q.tracks.shift();
   await playNext(guildId);
   await interaction.reply({
@@ -301,14 +383,12 @@ export async function handleQueue(interaction: ChatInputCommandInteraction): Pro
     await interaction.reply({ content: "📭 La file est vide.", ephemeral: true });
     return;
   }
-
   const lines = q.tracks.slice(0, 10).map((t, i) =>
     i === 0
       ? `▶️ **${t.title}** \`${t.durationFmt}\` — *${t.requestedBy}*`
       : `\`${i + 1}.\` ${t.title} \`${t.durationFmt}\` — *${t.requestedBy}*`,
   );
   const more = q.tracks.length > 10 ? `\n*… et ${q.tracks.length - 10} autre(s)*` : "";
-
   await interaction.reply({
     embeds: [
       new EmbedBuilder()

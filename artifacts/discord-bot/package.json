@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
+    "@distube/ytdl-core": "^4.16.12",
     "@replit/object-storage": "^1.0.0",
     "discord.js": "^14.26.3",
     "openai": "^6.34.0",
