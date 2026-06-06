@@ -1,7 +1,12 @@
 /**
  * music.ts — Lecture musicale via @discordjs/voice + play-dl
  *
- * Commandes exposées : play, skip, stop, pause, resume, queue, nowplaying
+ * Fixes vs v1:
+ *  - selfDeaf/selfMute = false → plus d'icône casque
+ *  - StreamType.Arbitrary → FFmpeg transcodes directement (plus fiable qu'Opus natif)
+ *  - entersState(Ready) avant de jouer → connexion confirmée avant stream
+ *  - Disconnect handler relancé uniquement si la queue existe encore (évite le faux-timeout de 5 s)
+ *  - resolveTrack préchargé avant join → on sait qu'on a un résultat avant de rejoindre
  */
 import {
   joinVoiceChannel,
@@ -11,9 +16,8 @@ import {
   VoiceConnectionStatus,
   getVoiceConnection,
   entersState,
-  type AudioPlayer,
-  type VoiceConnection,
   StreamType,
+  type AudioPlayer,
 } from "@discordjs/voice";
 import play from "play-dl";
 import {
@@ -40,6 +44,7 @@ interface GuildQueue {
   player: AudioPlayer;
   voiceChannelId: string;
   textChannelId: string;
+  destroying: boolean;
 }
 
 // ─────────────────────────────────────────────
@@ -60,10 +65,8 @@ function fmtSeconds(s: number): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-/** Resolve a YouTube URL or search query → Track */
 async function resolveTrack(query: string, requestedBy: string): Promise<Track | null> {
   try {
-    // Direct YouTube URL
     if (/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)/.test(query)) {
       const info = await play.video_info(query);
       const d = info.video_details;
@@ -75,8 +78,6 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
         requestedBy,
       };
     }
-
-    // Search
     const results = await play.search(query, { source: { youtube: "video" }, limit: 1 });
     const v = results[0];
     if (!v) return null;
@@ -92,11 +93,9 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
   }
 }
 
-/** Start playing the next track in the queue */
 async function playNext(guildId: string): Promise<void> {
   const q = queues.get(guildId);
   if (!q || q.tracks.length === 0) {
-    // Queue empty — leave voice
     destroyQueue(guildId);
     return;
   }
@@ -104,13 +103,14 @@ async function playNext(guildId: string): Promise<void> {
   const track = q.tracks[0]!;
 
   try {
-    const stream = await play.stream(track.url, { discordPlayerCompatibility: true });
+    // StreamType.Arbitrary → FFmpeg transcode, works with any format
+    const stream = await play.stream(track.url);
     const resource = createAudioResource(stream.stream, {
-      inputType: stream.type as StreamType,
+      inputType: StreamType.Arbitrary,
     });
     q.player.play(resource);
-  } catch {
-    // Skip broken track and try the next one
+  } catch (err) {
+    console.error("[music] Stream error, skipping:", (err as Error).message);
     q.tracks.shift();
     await playNext(guildId);
   }
@@ -119,6 +119,7 @@ async function playNext(guildId: string): Promise<void> {
 function destroyQueue(guildId: string): void {
   const q = queues.get(guildId);
   if (q) {
+    q.destroying = true;
     q.player.stop(true);
     queues.delete(guildId);
   }
@@ -144,6 +145,7 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
   const query = interaction.options.getString("query", true);
   const guildId = interaction.guildId!;
 
+  // Resolve track BEFORE joining so we don't connect for nothing
   const track = await resolveTrack(query, interaction.user.username);
   if (!track) {
     await interaction.editReply({ content: "❌ Aucun résultat trouvé pour cette recherche." });
@@ -153,12 +155,22 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
   let q = queues.get(guildId);
 
   if (!q) {
-    // Create a new connection + player
     const connection = joinVoiceChannel({
       channelId: voiceChannel.id,
       guildId,
       adapterCreator: interaction.guild!.voiceAdapterCreator,
+      selfDeaf: false,   // no deafened icon
+      selfMute: false,
     });
+
+    // Wait for the connection to be truly ready before playing
+    try {
+      await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+    } catch {
+      connection.destroy();
+      await interaction.editReply({ content: "❌ Impossible de rejoindre le salon vocal (timeout)." });
+      return;
+    }
 
     const player = createAudioPlayer();
     connection.subscribe(player);
@@ -168,54 +180,52 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
       player,
       voiceChannelId: voiceChannel.id,
       textChannelId: interaction.channelId,
+      destroying: false,
     };
     queues.set(guildId, q);
 
-    // Auto-disconnect on network errors
+    // Reconnect on unexpected drops; skip if queue was intentionally stopped
     connection.on(VoiceConnectionStatus.Disconnected, async () => {
+      const current = queues.get(guildId);
+      if (!current || current.destroying) return;
       try {
         await Promise.race([
-          entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-          entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+          entersState(connection, VoiceConnectionStatus.Signalling, 20_000),
+          entersState(connection, VoiceConnectionStatus.Connecting, 20_000),
         ]);
       } catch {
         destroyQueue(guildId);
       }
     });
 
-    // Advance queue when a track finishes
+    // Advance queue on track end
     player.on(AudioPlayerStatus.Idle, () => {
       const current = queues.get(guildId);
-      if (!current) return;
+      if (!current || current.destroying) return;
       current.tracks.shift();
       void playNext(guildId);
     });
 
-    player.on("error", () => {
+    player.on("error", (err) => {
+      console.error("[music] Player error:", err.message);
       const current = queues.get(guildId);
-      if (!current) return;
+      if (!current || current.destroying) return;
       current.tracks.shift();
       void playNext(guildId);
     });
   } else if (q.voiceChannelId !== voiceChannel.id) {
-    // Move bot to caller's channel
     const conn = getVoiceConnection(guildId);
     if (conn) {
-      conn.joinConfig.channelId = voiceChannel.id;
-      conn.rejoin({ channelId: voiceChannel.id, selfDeaf: true, selfMute: false });
+      conn.rejoin({ channelId: voiceChannel.id, selfDeaf: false, selfMute: false });
       q.voiceChannelId = voiceChannel.id;
     }
   }
 
   q.tracks.push(track);
 
-  const isFirst = q.tracks.length === 1;
-
-  if (isFirst) {
+  if (q.tracks.length === 1) {
     await playNext(guildId);
-    await interaction.editReply({
-      embeds: [buildTrackEmbed("▶️ Lecture", track)],
-    });
+    await interaction.editReply({ embeds: [buildTrackEmbed("▶️ Lecture", track)] });
   } else {
     await interaction.editReply({
       embeds: [buildTrackEmbed(`📥 Ajouté à la file (#${q.tracks.length})`, track)],
@@ -234,11 +244,7 @@ export async function handleSkip(interaction: ChatInputCommandInteraction): Prom
   q.tracks.shift();
   await playNext(guildId);
   await interaction.reply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(0x5865f2)
-        .setDescription(`⏭️ **${skipped}** ignorée.`),
-    ],
+    embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(`⏭️ **${skipped}** ignorée.`)],
   });
 }
 
@@ -250,11 +256,7 @@ export async function handleStop(interaction: ChatInputCommandInteraction): Prom
   }
   destroyQueue(guildId);
   await interaction.reply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(0xed4245)
-        .setDescription("⏹️ Lecture arrêtée. À bientôt !"),
-    ],
+    embeds: [new EmbedBuilder().setColor(0xed4245).setDescription("⏹️ Lecture arrêtée. À bientôt !")],
   });
 }
 
@@ -305,7 +307,6 @@ export async function handleQueue(interaction: ChatInputCommandInteraction): Pro
       ? `▶️ **${t.title}** \`${t.durationFmt}\` — *${t.requestedBy}*`
       : `\`${i + 1}.\` ${t.title} \`${t.durationFmt}\` — *${t.requestedBy}*`,
   );
-
   const more = q.tracks.length > 10 ? `\n*… et ${q.tracks.length - 10} autre(s)*` : "";
 
   await interaction.reply({
