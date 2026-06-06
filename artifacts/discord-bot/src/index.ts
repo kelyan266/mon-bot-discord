@@ -875,6 +875,16 @@ process.on("SIGINT", () => {
   void gracefulShutdown("SIGINT");
 });
 
+// Prevent unhandled promise rejections (e.g. Lavalink node timeouts) from
+// crashing the process. Log them instead.
+process.on("unhandledRejection", (reason) => {
+  console.error("[bot] unhandledRejection (non-fatal):", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[bot] uncaughtException (non-fatal):", err.message);
+});
+
 // Start DB restore in the background, then log in immediately.
 // login() no longer waits for the DB — the bot goes online in ~5 s even
 // if Neon is cold. loadJson() waits up to 5 s for the restore promise

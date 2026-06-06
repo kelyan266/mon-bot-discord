@@ -73,8 +73,13 @@ export async function initMusic(client: Client): Promise<void> {
     console.warn(`[music] Lavalink déconnecté: ${node.options.host}`);
   });
 
-  await lavalink.init({ id: client.user!.id, username: client.user!.username ?? "Bot" });
-  console.log("[music] Lavalink initialisé.");
+  try {
+    await lavalink.init({ id: client.user!.id, username: client.user!.username ?? "Bot" });
+    console.log("[music] Lavalink initialisé.");
+  } catch (err) {
+    console.error("[music] Lavalink init échoué (music désactivée):", (err as Error).message);
+    lavalink = null;
+  }
 }
 
 export function getLavalinkManager(): LavalinkManager | null {
