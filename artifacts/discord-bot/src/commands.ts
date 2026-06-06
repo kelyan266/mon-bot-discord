@@ -59,6 +59,7 @@ import {
   handleSlots,
 } from "./casino.js";
 import {
+  getLavalinkManager,
   handleLoop,
   handleNowPlaying,
   handlePause,
@@ -71,7 +72,7 @@ import {
   handleVolume,
   initMusic,
 } from "./music.js";
-export { initMusic };
+export { initMusic, getLavalinkManager };
 import {
   clearWelcomeConfig,
   generateWelcomeMessage,

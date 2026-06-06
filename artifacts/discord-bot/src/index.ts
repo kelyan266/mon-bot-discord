@@ -38,7 +38,7 @@ import {
   loadAndScheduleGiveaways,
   GIVEAWAY_BUTTON_PREFIX,
 } from "./giveaway.js";
-import { checkVoiceIdle } from "./music.js";
+import { checkVoiceIdle, getLavalinkManager } from "./music.js";
 import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
 import { cleanupAllOrphanedTempVCs, cleanupTempVC, isHubChannel, isTempVC, registerTempVC } from "./tempvc.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
@@ -183,7 +183,7 @@ client.once(Events.ClientReady, async (c) => {
   );
   await syncCommands(c.user.id);
   updatePresence();
-  void initMusic();
+  void initMusic(c);
 
   // Pre-warm permission + settings caches and invite tracking for every guild.
   for (const guild of c.guilds.cache.values()) {
@@ -843,6 +843,12 @@ async function grantLevelRoles(
 
 client.on(Events.Error, (err) => {
   console.error("Discord client error:", err);
+});
+
+// Forward raw voice packets to Lavalink (required for voice to work)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+client.on("raw", (d: any) => {
+  getLavalinkManager()?.sendRawData(d);
 });
 
 async function gracefulShutdown(signal: string): Promise<void> {
