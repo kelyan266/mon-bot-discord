@@ -197,6 +197,11 @@ import {
   MARRY_ACCEPT_PREFIX,
   MARRY_DECLINE_PREFIX,
 } from "./marriage.js";
+import {
+  getInviteStats,
+  getTopInviters,
+  resetInviteStats,
+} from "./invites.js";
 
 const COLOR_PRIMARY = 0x5865f2;
 const COLOR_SUCCESS = 0x57f287;
@@ -1144,6 +1149,45 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       name: "nowplaying",
       description: "🎶 Afficher la musique en cours",
       dm_permission: false,
+    },
+    // ── Invitations ────────────────────────────────────
+    {
+      name: "invitations",
+      description: "📨 Voir les statistiques d'invitations",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "voir",
+          description: "Voir les invitations d'un membre (ou les tiennes)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "membre",
+              description: "Le membre à consulter (toi par défaut)",
+              required: false,
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "classement",
+          description: "Voir le classement des meilleurs inviteurs du serveur",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "reset",
+          description: "Remettre à zéro les invitations d'un membre *(admin)*",
+          options: [
+            {
+              type: ApplicationCommandOptionType.User,
+              name: "membre",
+              description: "Le membre à réinitialiser",
+              required: true,
+            },
+          ],
+        },
+      ],
     },
     // ── Insultes ───────────────────────────────────────
     {
@@ -3060,6 +3104,8 @@ export async function handleInteraction(
       return handleQueue(interaction);
     case "nowplaying":
       return handleNowPlaying(interaction);
+    case "invitations":
+      return handleInvitations(interaction);
     case "insulter":
       return handleInsulter(interaction);
     default:
@@ -7996,6 +8042,77 @@ async function handleHack(
   for (let i = 1; i < steps.length; i++) {
     await new Promise((r) => setTimeout(r, 900 + Math.random() * 400));
     await interaction.editReply({ embeds: [buildEmbed(i, i === steps.length - 1)] });
+  }
+}
+
+async function handleInvitations(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guildId!;
+
+  if (sub === "voir") {
+    const target = interaction.options.getUser("membre") ?? interaction.user;
+    const stats = await getInviteStats(guildId, target.id);
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_PRIMARY)
+          .setTitle(`📨 Invitations de ${target.username}`)
+          .setThumbnail(target.displayAvatarURL({ size: 128 }))
+          .addFields(
+            { name: "✅ Invitations actives", value: String(stats.current), inline: true },
+            { name: "📥 Total invités", value: String(stats.total), inline: true },
+            { name: "🚪 Partis", value: String(stats.left), inline: true },
+          )
+          .setFooter({ text: `${stats.current} membre${stats.current > 1 ? "s" : ""} encore présent${stats.current > 1 ? "s" : ""} grâce à ${target.username}` }),
+      ],
+    });
+    return;
+  }
+
+  if (sub === "classement") {
+    const top = await getTopInviters(guildId, 10);
+    if (!top.length) {
+      await interaction.reply({ content: "📭 Aucune invitation enregistrée sur ce serveur.", ephemeral: true });
+      return;
+    }
+    const medals = ["🥇", "🥈", "🥉"];
+    const lines = top.map((entry, i) => {
+      const medal = medals[i] ?? `\`${i + 1}.\``;
+      return `${medal} <@${entry.userId}> — **${entry.current}** actives · ${entry.total} total · ${entry.left} partis`;
+    });
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_PRIMARY)
+          .setTitle("🏆 Classement des inviteurs")
+          .setDescription(lines.join("\n")),
+      ],
+    });
+    return;
+  }
+
+  if (sub === "reset") {
+    const member = interaction.member;
+    const isAdmin =
+      member &&
+      "permissions" in member &&
+      (member.permissions as Readonly<import("discord.js").PermissionsBitField>).has("ManageGuild");
+    if (!isAdmin) {
+      await interaction.reply({ content: "❌ Tu dois avoir la permission **Gérer le serveur** pour faire ça.", ephemeral: true });
+      return;
+    }
+    const target = interaction.options.getUser("membre", true);
+    await resetInviteStats(guildId, target.id);
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLOR_SUCCESS)
+          .setDescription(`✅ Les invitations de <@${target.id}> ont été remises à zéro.`),
+      ],
+    });
+    return;
   }
 }
 

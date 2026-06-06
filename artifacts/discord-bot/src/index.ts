@@ -26,6 +26,13 @@ import {
   HELP_SELECT_ID,
   initMusic,
 } from "./commands.js";
+import {
+  initInviteCache,
+  handleInviteMemberJoin,
+  handleInviteMemberLeave,
+  updateInviteCacheEntry,
+  removeFromInviteCache,
+} from "./invites.js";
 import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
 import { cleanupAllOrphanedTempVCs, cleanupTempVC, isHubChannel, isTempVC, registerTempVC } from "./tempvc.js";
 import { checkSpam, resetActivity } from "./antiSpam.js";
@@ -88,6 +95,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildPresences,
     GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.GuildInvites,
   ],
 });
 
@@ -171,13 +179,12 @@ client.once(Events.ClientReady, async (c) => {
   updatePresence();
   void initMusic();
 
-  // Pre-warm permission + settings caches for every guild so the first
-  // command handler never blocks on loadJson → interactions stay within
-  // Discord's 3-second window even when the DB is slow.
+  // Pre-warm permission + settings caches and invite tracking for every guild.
   for (const guild of c.guilds.cache.values()) {
     void Promise.all([
       getBotRoles(guild.id),
       getAllPerms(guild.id),
+      initInviteCache(guild),
     ]).catch(() => {});
   }
 
@@ -607,6 +614,33 @@ client.on(Events.GuildMemberAdd, (member) => {
   void handleMemberJoinRaid(member, client).catch((err) =>
     console.error("Anti-raid handler failed:", err),
   );
+});
+
+// Invite tracking — detect which invite was used on join
+client.on(Events.GuildMemberAdd, (member) => {
+  if (member.user.bot) return;
+  void handleInviteMemberJoin(member).then((inviterId) => {
+    if (inviterId) console.log(`[invites] ${member.user.tag} invité par ${inviterId}`);
+  }).catch((err) => console.error("Invite join tracking failed:", err));
+});
+
+// Invite tracking — mark member as left
+client.on(Events.GuildMemberRemove, (member) => {
+  if (member.user.bot) return;
+  void handleInviteMemberLeave(member as import("discord.js").GuildMember).catch((err) =>
+    console.error("Invite leave tracking failed:", err),
+  );
+});
+
+// Keep invite cache fresh
+client.on(Events.InviteCreate, (invite) => {
+  if (!invite.inviter || !invite.guild) return;
+  updateInviteCacheEntry(invite.guild.id, invite.code, invite.uses ?? 0, invite.inviter.id);
+});
+
+client.on(Events.InviteDelete, (invite) => {
+  if (!invite.guild) return;
+  removeFromInviteCache(invite.guild.id, invite.code);
 });
 
 // Anti-nuke: audit log entry tracking
