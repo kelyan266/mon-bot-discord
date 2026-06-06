@@ -1,8 +1,9 @@
 /**
  * music.ts — Lecture musicale via yt-dlp + @discordjs/voice
  *
- * play-dl était bloqué par YouTube ("Sign in to confirm you're not a bot").
- * yt-dlp contourne cette détection de manière fiable avec son propre client.
+ * Source : SoundCloud (YouTube est bloqué au niveau réseau sur Replit Production).
+ * yt-dlp prend en charge SoundCloud nativement via scsearch1: pour les recherches.
+ * Les URLs directes (SoundCloud, Bandcamp, etc.) sont également prises en charge.
  *
  * Architecture :
  *  - Métadonnées (titre, durée, thumbnail) → yt-dlp --print-json --no-download
@@ -79,7 +80,8 @@ function fmtSeconds(s: number): string {
 async function resolveTrack(query: string, requestedBy: string): Promise<Track | null> {
   return new Promise((resolve) => {
     const isUrl = /^https?:\/\//.test(query);
-    const target = isUrl ? query : `ytsearch1:${query}`;
+    // SoundCloud search for queries; direct URLs passed through as-is
+    const target = isUrl ? query : `scsearch1:${query}`;
 
     const args = [
       "--print-json",
@@ -87,7 +89,6 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
       "--quiet",
       "--no-playlist",
       "--socket-timeout", "10",
-      "--extractor-args", "youtube:player_client=android,ios",
       target,
     ];
 
@@ -147,7 +148,6 @@ function spawnAudioStream(url: string): ChildProcess {
     "--no-playlist",
     "--no-warnings",
     "--socket-timeout", "10",
-    "--extractor-args", "youtube:player_client=android,ios",
     url,
   ]);
 }
@@ -234,7 +234,7 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
   await interaction.editReply({ content: "🔍 Recherche en cours…" });
   const track = await resolveTrack(query, interaction.user.username);
   if (!track) {
-    await interaction.editReply({ content: "❌ Aucun résultat trouvé (YouTube peut bloquer temporairement — réessaie dans quelques secondes)." });
+    await interaction.editReply({ content: "❌ Aucun résultat trouvé sur SoundCloud. Essaie un titre différent ou colle une URL directe." });
     return;
   }
 
