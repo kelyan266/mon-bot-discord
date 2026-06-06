@@ -52,7 +52,8 @@ import { recordChannelMessage } from "./channelStats.js";
 import { addMessageXp, addVoiceXp, shutdownFlush } from "./levels.js";
 import { startRestore } from "./persist.js";
 import { getRolesUpToLevel } from "./levelRoles.js";
-import { isAutomodEnabled, isXpEnabled } from "./settings.js";
+import { getBotRoles, isAutomodEnabled, isXpEnabled } from "./settings.js";
+import { getAllPerms } from "./permissions.js";
 import {
   CLOSE_BUTTON_ID,
   PANEL_BUTTON_ID,
@@ -167,6 +168,16 @@ client.once(Events.ClientReady, async (c) => {
   );
   await syncCommands(c.user.id);
   updatePresence();
+
+  // Pre-warm permission + settings caches for every guild so the first
+  // command handler never blocks on loadJson → interactions stay within
+  // Discord's 3-second window even when the DB is slow.
+  for (const guild of c.guilds.cache.values()) {
+    void Promise.all([
+      getBotRoles(guild.id),
+      getAllPerms(guild.id),
+    ]).catch(() => {});
+  }
 
   // Clean up orphaned temp VCs from before last restart
   for (const guild of c.guilds.cache.values()) {
