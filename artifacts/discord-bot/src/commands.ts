@@ -75,6 +75,12 @@ import {
   setWelcomeConfig,
 } from "./aiWelcome.js";
 import {
+  getPersonalityLevel,
+  setPersonalityLevel,
+  PERSONALITY_LEVELS,
+  DEFAULT_PERSONALITY,
+} from "./ai-chat.js";
+import {
   cancelEvent,
   createEvent,
   getEvent,
@@ -2707,6 +2713,41 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
         },
       ],
     },
+    {
+      name: "botpersonnalite",
+      description: "🤖 Régler la personnalité / niveau de réactivité du bot IA",
+      default_member_permissions: PermissionFlagsBits.ManageGuild.toString(),
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "set",
+          description: "Choisir le niveau de personnalité du bot (1 = poli → 5 = sans filtre)",
+          options: [
+            {
+              type: ApplicationCommandOptionType.Integer,
+              name: "niveau",
+              description: "Niveau de personnalité",
+              required: true,
+              min_value: 1,
+              max_value: 5,
+              choices: [
+                { name: "1 — 🕊️ Poli (calme même si insulté)", value: 1 },
+                { name: "2 — 😐 Neutre (légère ironie)", value: 2 },
+                { name: "3 — 😏 Normal (wit et répartie)", value: 3 },
+                { name: "4 — 😈 Baveux (répliques acérées)", value: 4 },
+                { name: "5 — 🔥 Sans filtre (aucune retenue)", value: 5 },
+              ],
+            },
+          ],
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "get",
+          description: "Voir le niveau de personnalité actuel du bot",
+        },
+      ],
+    },
   ];
 
 function moderatableMember(
@@ -2886,6 +2927,8 @@ export async function handleInteraction(
       return handleShow(interaction);
     case "aiwelcome":
       return handleAiWelcome(interaction);
+    case "botpersonnalite":
+      return handleBotPersonnalite(interaction);
     case "logs":
       return handleLogs(interaction);
     case "activity":
@@ -6922,6 +6965,49 @@ export async function handleHelpSelect(
   await interaction.update({
     embeds: [page.build()],
     components: [buildHelpComponents(cat ?? "overview")],
+  });
+}
+
+async function handleBotPersonnalite(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guildId!;
+
+  if (sub === "set") {
+    const niveau = interaction.options.getInteger("niveau", true);
+    await setPersonalityLevel(guildId, niveau);
+    const p = PERSONALITY_LEVELS[niveau]!;
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x5865f2)
+          .setTitle("🤖 Personnalité mise à jour")
+          .setDescription(`Le bot est maintenant en mode **${p.label}**.`)
+          .addFields({ name: "Description", value: p.description })
+          .setFooter({ text: "Mentionne le bot pour lui parler." }),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // sub === "get"
+  const niveau = await getPersonalityLevel(guildId);
+  const p = PERSONALITY_LEVELS[niveau] ?? PERSONALITY_LEVELS[DEFAULT_PERSONALITY]!;
+  const lines = Object.entries(PERSONALITY_LEVELS).map(([k, v]) =>
+    Number(k) === niveau ? `**→ ${v.label}** ← actuel` : `${v.label}`,
+  );
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle("🤖 Personnalité du bot")
+        .setDescription(lines.join("\n"))
+        .addFields({ name: "Description actuelle", value: p.description })
+        .setFooter({ text: "Utilise /botpersonnalite set pour changer le niveau." }),
+    ],
+    ephemeral: true,
   });
 }
 

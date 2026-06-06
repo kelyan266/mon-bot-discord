@@ -48,7 +48,7 @@ export const CATEGORIES = {
     label: "⚙️ Configuration",
     description: "autorole, automod, levels (config), botrole, casino (config), setavatar",
     commands: new Set([
-      "autorole", "automod", "levels", "botrole", "casino", "setavatar", "aiwelcome", "protection",
+      "autorole", "automod", "levels", "botrole", "casino", "setavatar", "aiwelcome", "protection", "botpersonnalite",
     ]),
   },
   music: {
