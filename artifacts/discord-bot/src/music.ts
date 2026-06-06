@@ -86,6 +86,8 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
       "--no-download",
       "--quiet",
       "--no-playlist",
+      "--socket-timeout", "10",
+      "--extractor-args", "youtube:player_client=android,ios",
       target,
     ];
 
@@ -99,7 +101,7 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
       proc.kill();
       console.error("[music] yt-dlp info timeout");
       resolve(null);
-    }, 20_000);
+    }, 15_000);
 
     proc.on("close", (code) => {
       clearTimeout(timeout);
@@ -139,11 +141,13 @@ async function resolveTrack(query: string, requestedBy: string): Promise<Track |
  */
 function spawnAudioStream(url: string): ChildProcess {
   return spawn("yt-dlp", [
-    "-o", "-",               // output to stdout
-    "-f", "bestaudio/best",  // best audio track
+    "-o", "-",
+    "-f", "bestaudio/best",
     "--quiet",
     "--no-playlist",
     "--no-warnings",
+    "--socket-timeout", "10",
+    "--extractor-args", "youtube:player_client=android,ios",
     url,
   ]);
 }
