@@ -148,3 +148,41 @@ export async function replyWithAI(opts: {
 export function clearHistory(guildId: string, channelId: string, userId: string): void {
   histories.delete(historyKey(guildId, channelId, userId));
 }
+
+// ─────────────────────────────────────────────
+// Insult generator
+// ─────────────────────────────────────────────
+
+export async function generateInsult(opts: {
+  targetName: string;
+  reason?: string;
+  guildId: string;
+}): Promise<string> {
+  if (!client) return `${opts.targetName} est vraiment nul. 🤷`;
+
+  const level = await getPersonalityLevel(opts.guildId);
+  const vulgarity =
+    level <= 2
+      ? "légère et humoristique, jamais vulgaire"
+      : level === 3
+        ? "piquante avec du wit, légèrement vulgaire si besoin"
+        : "franche, mordante, sans filtre, vulgaire si besoin";
+
+  const reasonLine = opts.reason ? ` La raison : "${opts.reason}".` : "";
+
+  try {
+    const completion = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 150,
+      messages: [
+        {
+          role: "system",
+          content: `Tu es Louboutin, un bot Discord avec du caractère. Génère une insulte en français ciblant ${opts.targetName}.${reasonLine} L'insulte doit être ${vulgarity}, créative, percutante et courte (1-2 phrases max). Ne commence pas par "Tu es" — sois original.`,
+        },
+      ],
+    });
+    return completion.choices[0]?.message?.content?.trim() ?? `${opts.targetName} mérite mieux que mes mots. 💀`;
+  } catch {
+    return `${opts.targetName}... même les mots me manquent pour décrire à quel point t'es nul. 🫠`;
+  }
+}

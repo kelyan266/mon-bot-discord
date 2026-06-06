@@ -81,6 +81,7 @@ import {
   setPersonalityLevel,
   PERSONALITY_LEVELS,
   DEFAULT_PERSONALITY,
+  generateInsult,
 } from "./ai-chat.js";
 import {
   cancelEvent,
@@ -1143,6 +1144,26 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
       name: "nowplaying",
       description: "🎶 Afficher la musique en cours",
       dm_permission: false,
+    },
+    // ── Insultes ───────────────────────────────────────
+    {
+      name: "insulter",
+      description: "💀 Faire insulter quelqu'un par le bot (IA)",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: "cible",
+          description: "La personne à insulter",
+          required: true,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "raison",
+          description: "Raison de l'insulte (optionnel)",
+          required: false,
+        },
+      ],
     },
     {
       name: "permissions",
@@ -3039,6 +3060,8 @@ export async function handleInteraction(
       return handleQueue(interaction);
     case "nowplaying":
       return handleNowPlaying(interaction);
+    case "insulter":
+      return handleInsulter(interaction);
     default:
       await reply(
         interaction,
@@ -7974,6 +7997,30 @@ async function handleHack(
     await new Promise((r) => setTimeout(r, 900 + Math.random() * 400));
     await interaction.editReply({ embeds: [buildEmbed(i, i === steps.length - 1)] });
   }
+}
+
+async function handleInsulter(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  await interaction.deferReply();
+  const target = interaction.options.getUser("cible", true);
+  const raison = interaction.options.getString("raison") ?? undefined;
+  const guildId = interaction.guildId!;
+
+  const insult = await generateInsult({
+    targetName: target.username,
+    reason: raison,
+    guildId,
+  });
+
+  await interaction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0xed4245)
+        .setDescription(`<@${target.id}> — ${insult}`)
+        .setFooter({ text: `Demandé par ${interaction.user.username}` }),
+    ],
+  });
 }
 
 async function handleVoiceCmd(

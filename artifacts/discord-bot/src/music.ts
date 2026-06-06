@@ -8,6 +8,7 @@
  * Architecture :
  *  - Métadonnées + stream → play.search() / play.stream()
  */
+import { spawn } from "node:child_process";
 import play from "play-dl";
 import {
   joinVoiceChannel,
@@ -51,6 +52,8 @@ interface GuildQueue {
 // Initialisation
 // ─────────────────────────────────────────────
 
+let scClientId: string | null = null;
+
 /**
  * Doit être appelé une fois au démarrage du bot (après ClientReady).
  * Récupère un client_id SoundCloud depuis le site public.
@@ -59,6 +62,7 @@ export async function initMusic(): Promise<void> {
   try {
     const clientId = await play.getFreeClientID();
     play.setToken({ soundcloud: { client_id: clientId } });
+    scClientId = clientId;
     console.log("[music] SoundCloud client_id initialisé.");
   } catch (err) {
     console.error("[music] Impossible d'initialiser le client_id SoundCloud :", (err as Error).message);
@@ -70,6 +74,55 @@ export async function initMusic(): Promise<void> {
 // ─────────────────────────────────────────────
 
 const queues = new Map<string, GuildQueue>();
+
+// ─────────────────────────────────────────────
+// SoundCloud progressive stream (bypasses HLS CDN)
+// ─────────────────────────────────────────────
+
+interface ScTranscoding {
+  url: string;
+  format: { protocol: string; mime_type: string };
+}
+interface ScTrackInfo {
+  media?: { transcodings?: ScTranscoding[] };
+}
+
+/**
+ * Bypasses play-dl's HLS stream (cf-hls-media.sndcdn.com — bloqué en prod).
+ * Utilise directement l'API SoundCloud pour récupérer l'URL progressive (MP3 direct).
+ */
+async function getProgressiveStreamUrl(trackPageUrl: string): Promise<string | null> {
+  if (!scClientId) return null;
+  try {
+    const resolveRes = await fetch(
+      `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(trackPageUrl)}&client_id=${scClientId}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (!resolveRes.ok) {
+      console.error("[music] SoundCloud resolve", resolveRes.status);
+      return null;
+    }
+    const track = (await resolveRes.json()) as ScTrackInfo;
+
+    // Prefer progressive (direct MP3) over HLS to avoid cf-hls-media CDN
+    const transcodings = track.media?.transcodings ?? [];
+    const progressive = transcodings.find((t) => t.format.protocol === "progressive");
+    const hls = transcodings.find((t) => t.format.protocol === "hls");
+    const chosen = progressive ?? hls;
+    if (!chosen) return null;
+
+    const streamRes = await fetch(
+      `${chosen.url}?client_id=${scClientId}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (!streamRes.ok) return null;
+    const streamData = (await streamRes.json()) as { url: string };
+    return streamData.url ?? null;
+  } catch (err) {
+    console.error("[music] getProgressiveStreamUrl:", (err as Error).message);
+    return null;
+  }
+}
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -153,13 +206,45 @@ async function playNext(guildId: string): Promise<void> {
   const track = q.tracks[0]!;
 
   try {
-    const stream = await play.stream(track.url, { discordPlayerCompatibility: true });
-    const resource = createAudioResource(stream.stream, {
-      inputType: stream.type as StreamType,
+    // Use direct SoundCloud API (progressive MP3) + ffmpeg to bypass HLS CDN block
+    const streamUrl = await getProgressiveStreamUrl(track.url);
+    if (!streamUrl) throw new Error("Impossible de récupérer l'URL de stream SoundCloud.");
+
+    const proc = spawn("ffmpeg", [
+      "-reconnect", "1",
+      "-reconnect_streamed", "1",
+      "-reconnect_delay_max", "5",
+      "-i", streamUrl,
+      "-vn",
+      "-f", "ogg",
+      "-c:a", "libopus",
+      "-ar", "48000",
+      "-ac", "2",
+      "-b:a", "128k",
+      "pipe:1",
+    ]);
+
+    proc.stderr?.on("data", (d: Buffer) => {
+      const msg = d.toString().trim();
+      if (msg && !msg.startsWith("size=") && !msg.startsWith("frame=")) {
+        console.error("[music] ffmpeg:", msg);
+      }
+    });
+
+    proc.on("error", (err: Error) => {
+      console.error("[music] ffmpeg spawn error:", err.message);
+      const current = queues.get(guildId);
+      if (!current || current.destroying) return;
+      current.tracks.shift();
+      void playNext(guildId);
+    });
+
+    const resource = createAudioResource(proc.stdout!, {
+      inputType: StreamType.OggOpus,
     });
     q.player.play(resource);
   } catch (err) {
-    console.error("[music] playNext stream error:", (err as Error).message);
+    console.error("[music] playNext error:", (err as Error).message);
     q.tracks.shift();
     await playNext(guildId);
   }
