@@ -51,6 +51,13 @@ export const CATEGORIES = {
       "autorole", "automod", "levels", "botrole", "casino", "setavatar", "aiwelcome", "protection",
     ]),
   },
+  music: {
+    label: "🎵 Musique",
+    description: "play, skip, stop, pause, resume, queue, nowplaying",
+    commands: new Set([
+      "play", "skip", "stop", "pause", "resume", "queue", "nowplaying",
+    ]),
+  },
 } as const;
 
 export type CategoryId = keyof typeof CATEGORIES;

@@ -59,6 +59,15 @@ import {
   handleSlots,
 } from "./casino.js";
 import {
+  handleNowPlaying,
+  handlePause,
+  handlePlay,
+  handleQueue,
+  handleResume,
+  handleSkip,
+  handleStop,
+} from "./music.js";
+import {
   clearWelcomeConfig,
   generateWelcomeMessage,
   getToneLabel,
@@ -1083,6 +1092,50 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
         },
       ],
     },
+    // ── Musique ────────────────────────────────────────
+    {
+      name: "play",
+      description: "🎵 Rejoindre ton salon vocal et lancer une musique",
+      dm_permission: false,
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: "query",
+          description: "Titre, artiste ou URL YouTube",
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "skip",
+      description: "⏭️ Passer la musique en cours",
+      dm_permission: false,
+    },
+    {
+      name: "stop",
+      description: "⏹️ Stopper la musique et quitter le salon vocal",
+      dm_permission: false,
+    },
+    {
+      name: "pause",
+      description: "⏸️ Mettre la musique en pause",
+      dm_permission: false,
+    },
+    {
+      name: "resume",
+      description: "▶️ Reprendre la musique après une pause",
+      dm_permission: false,
+    },
+    {
+      name: "queue",
+      description: "📋 Afficher la file d'attente",
+      dm_permission: false,
+    },
+    {
+      name: "nowplaying",
+      description: "🎶 Afficher la musique en cours",
+      dm_permission: false,
+    },
     {
       name: "permissions",
       description: "🔐 Gérer qui peut utiliser chaque catégorie de commandes",
@@ -1110,6 +1163,7 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
                 { name: "🎟️ Tickets", value: "tickets" },
                 { name: "🛠️ Utilitaires", value: "utilities" },
                 { name: "⚙️ Configuration", value: "config" },
+                { name: "🎵 Musique", value: "music" },
               ],
             },
             {
@@ -1137,6 +1191,7 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
                 { name: "🎟️ Tickets", value: "tickets" },
                 { name: "🛠️ Utilitaires", value: "utilities" },
                 { name: "⚙️ Configuration", value: "config" },
+                { name: "🎵 Musique", value: "music" },
               ],
             },
             {
@@ -1164,6 +1219,7 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
                 { name: "🎟️ Tickets", value: "tickets" },
                 { name: "🛠️ Utilitaires", value: "utilities" },
                 { name: "⚙️ Configuration", value: "config" },
+                { name: "🎵 Musique", value: "music" },
               ],
             },
             {
@@ -1191,6 +1247,7 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
                 { name: "🎟️ Tickets", value: "tickets" },
                 { name: "🛠️ Utilitaires", value: "utilities" },
                 { name: "⚙️ Configuration", value: "config" },
+                { name: "🎵 Musique", value: "music" },
               ],
             },
             {
@@ -1218,6 +1275,7 @@ export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody
                 { name: "🎟️ Tickets", value: "tickets" },
                 { name: "🛠️ Utilitaires", value: "utilities" },
                 { name: "⚙️ Configuration", value: "config" },
+                { name: "🎵 Musique", value: "music" },
                 { name: "🔄 Toutes les catégories", value: "all" },
               ],
             },
@@ -2922,6 +2980,20 @@ export async function handleInteraction(
       return handleVoiceCmd(interaction);
     case "tempvc":
       return handleTempVC(interaction);
+    case "play":
+      return handlePlay(interaction);
+    case "skip":
+      return handleSkip(interaction);
+    case "stop":
+      return handleStop(interaction);
+    case "pause":
+      return handlePause(interaction);
+    case "resume":
+      return handleResume(interaction);
+    case "queue":
+      return handleQueue(interaction);
+    case "nowplaying":
+      return handleNowPlaying(interaction);
     default:
       await reply(
         interaction,
@@ -6761,6 +6833,28 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "/protection antiraid enable|disable|status|config", value: "Anti-raid : bloque les jointures massives suspectes", inline: false },
           { name: "/protection antiwebhook enable|disable|status|config", value: "Supprime les webhooks non autorisés", inline: false },
         )
+        .setTimestamp(),
+  },
+
+  musique: {
+    label: "Musique",
+    emoji: "🎵",
+    description: "Lecture YouTube en vocal : play, skip, stop, pause, queue…",
+    build: () =>
+      new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle("🎵 Musique")
+        .setDescription("Le bot rejoint ton salon vocal et lit de la musique YouTube.")
+        .addFields(
+          { name: "/play <titre ou URL YouTube>", value: "Rejoindre ton salon vocal et lancer une musique. Si une piste est déjà en cours, elle est ajoutée à la file.", inline: false },
+          { name: "/skip", value: "Passer la piste en cours et lire la suivante.", inline: false },
+          { name: "/stop", value: "Stopper la lecture et quitter le salon vocal.", inline: false },
+          { name: "/pause", value: "Mettre la musique en pause.", inline: false },
+          { name: "/resume", value: "Reprendre la lecture après une pause.", inline: false },
+          { name: "/queue", value: "Afficher la file d'attente (10 premières pistes).", inline: false },
+          { name: "/nowplaying", value: "Afficher la piste en cours de lecture.", inline: false },
+        )
+        .setFooter({ text: "Tu dois être dans un salon vocal pour utiliser /play." })
         .setTimestamp(),
   },
 };
