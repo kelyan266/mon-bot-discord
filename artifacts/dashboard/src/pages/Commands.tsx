@@ -866,6 +866,17 @@ const CATEGORIES: Category[] = [
         permissions: "Gérer le serveur",
       },
       {
+        name: "/botpersonnalite",
+        usage: "/botpersonnalite set|get",
+        description: "Configurer la personnalité de l'IA du bot (niveaux 1–5).",
+        details: "Niveau 1 : Formel & neutre. Niveau 2 : Professionnel. Niveau 3 : Amical (défaut). Niveau 4 : Décontracté. Niveau 5 : Provoc & sans filtre. Affecte les réponses quand tu mentionnes le bot.",
+        permissions: "Gérer le serveur",
+        options: [
+          { name: "set niveau", description: "Définir le niveau de personnalité (1–5)", required: false },
+          { name: "get", description: "Voir la personnalité actuelle et toutes les options", required: false },
+        ],
+      },
+      {
         name: "/permissions",
         usage: "/permissions view|add-role|remove-role|…",
         description: "Gérer les accès aux catégories de commandes par rôle.",
@@ -958,6 +969,54 @@ const CATEGORIES: Category[] = [
         usage: "/protection antiwebhook enable|disable|status|config",
         description: "Supprimer automatiquement les webhooks non autorisés.",
         permissions: "Administrateur",
+      },
+    ],
+  },
+  {
+    id: "music",
+    label: "Musique",
+    icon: Music2,
+    color: "#5865F2",
+    commands: [
+      {
+        name: "/play",
+        usage: "/play <titre ou URL YouTube>",
+        description: "Rejoindre le salon vocal et lancer une musique YouTube.",
+        details: "Fonctionne avec un titre (recherche automatique) ou une URL YouTube directe. Si une piste est déjà en cours, la nouvelle est ajoutée à la file d'attente. Tu dois être dans un salon vocal.",
+        options: [
+          { name: "query", description: "Titre ou URL YouTube à lire", required: true },
+        ],
+      },
+      {
+        name: "/skip",
+        usage: "/skip",
+        description: "Passer la piste en cours et lire la suivante dans la file.",
+      },
+      {
+        name: "/stop",
+        usage: "/stop",
+        description: "Stopper la lecture et faire quitter le salon vocal au bot.",
+        details: "Vide la file d'attente et déconnecte le bot.",
+      },
+      {
+        name: "/pause",
+        usage: "/pause",
+        description: "Mettre la musique en pause.",
+      },
+      {
+        name: "/resume",
+        usage: "/resume",
+        description: "Reprendre la lecture après une pause.",
+      },
+      {
+        name: "/queue",
+        usage: "/queue",
+        description: "Afficher la file d'attente (10 premières pistes).",
+      },
+      {
+        name: "/nowplaying",
+        usage: "/nowplaying",
+        description: "Afficher la piste en cours de lecture avec sa durée et son thumbnail.",
       },
     ],
   },
@@ -1120,7 +1179,7 @@ export default function Commands() {
         <div>
           <h2 className="text-lg font-semibold">Commandes</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            68 slash commands · {CATEGORIES.length} catégories
+            83 slash commands · {CATEGORIES.length} catégories
           </p>
         </div>
         <div className="relative w-64">

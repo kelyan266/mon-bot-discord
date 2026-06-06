@@ -6597,10 +6597,11 @@ const HELP_PAGES: Record<string, HelpPage> = {
           { name: "🎰 Casino", value: "`/balance` · `/daily` · `/slots` · `/blackjack`…", inline: true },
           { name: "🎟️ Tickets", value: "`/ticket close` · `add` · `remove`", inline: true },
           { name: "📅 Événements", value: "`/event create` · `join` · `list` · `info`…", inline: true },
-          { name: "🎵 Activité", value: "`/activity` · `/whoisplaying` · `/sessions`…", inline: true },
+          { name: "🎵 Musique", value: "`/play` · `/skip` · `/stop` · `/pause` · `/queue` · `/nowplaying`", inline: true },
+          { name: "🎤 Activité", value: "`/activity` · `/whoisplaying` · `/spotify` · `/sessions`…", inline: true },
           { name: "🎙️ Vocal", value: "`/tempvc create` · `/tempvc rename` · `/voice lock`…", inline: true },
           { name: "📣 Annonces", value: "`/say` · `/announce` · `/mention` · `/embed`…", inline: true },
-          { name: "⚙️ Config *(admin)*", value: "`/logs` · `/autorole` · `/automod` · `/casino config`…", inline: true },
+          { name: "⚙️ Config *(admin)*", value: "`/logs` · `/autorole` · `/automod` · `/botpersonnalite`…", inline: true },
           { name: "🔐 Protection *(admin)*", value: "`/protection antinuke` · `antiraid` · `antiwebhook`", inline: true },
         )
         .setFooter({ text: `${commandDefinitions.length} commandes • Sélectionne une catégorie ↓` })
