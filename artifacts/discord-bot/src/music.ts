@@ -1,15 +1,14 @@
 /**
- * music.ts — Lecture musicale via yt-dlp + @discordjs/voice
+ * music.ts — Lecture musicale via play-dl (SoundCloud) + @discordjs/voice
  *
- * Source : SoundCloud (YouTube est bloqué au niveau réseau sur Replit Production).
- * yt-dlp prend en charge SoundCloud nativement via scsearch1: pour les recherches.
- * Les URLs directes (SoundCloud, Bandcamp, etc.) sont également prises en charge.
+ * Source : SoundCloud via play-dl (HTTP natif Node.js — pas de processus externe).
+ * yt-dlp était bloqué en prod car les sites audio sont filtrés au niveau réseau.
+ * play-dl utilise l'API SoundCloud directement via fetch, ce qui contourne le blocage.
  *
  * Architecture :
- *  - Métadonnées (titre, durée, thumbnail) → yt-dlp --print-json --no-download
- *  - Stream audio                           → yt-dlp -o - stdout | ffmpeg → Opus
+ *  - Métadonnées + stream → play.search() / play.stream()
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import play from "play-dl";
 import {
   joinVoiceChannel,
   createAudioPlayer,
@@ -46,16 +45,6 @@ interface GuildQueue {
   voiceChannelId: string;
   textChannelId: string;
   destroying: boolean;
-  currentProc?: ChildProcess;
-}
-
-interface YtDlpInfo {
-  webpage_url?: string;
-  url?: string;
-  title?: string;
-  duration?: number;
-  thumbnail?: string;
-  thumbnails?: Array<{ url: string }>;
 }
 
 // ─────────────────────────────────────────────
@@ -65,7 +54,7 @@ interface YtDlpInfo {
 const queues = new Map<string, GuildQueue>();
 
 // ─────────────────────────────────────────────
-// yt-dlp helpers
+// Helpers
 // ─────────────────────────────────────────────
 
 function fmtSeconds(s: number): string {
@@ -76,80 +65,60 @@ function fmtSeconds(s: number): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-/** Fetch video metadata via yt-dlp (no download). Works for URLs and search queries. */
-async function resolveTrack(query: string, requestedBy: string): Promise<Track | null> {
-  return new Promise((resolve) => {
-    const isUrl = /^https?:\/\//.test(query);
-    // SoundCloud search for queries; direct URLs passed through as-is
-    const target = isUrl ? query : `scsearch1:${query}`;
-
-    const args = [
-      "--print-json",
-      "--no-download",
-      "--quiet",
-      "--no-playlist",
-      "--socket-timeout", "10",
-      target,
-    ];
-
-    const proc = spawn("yt-dlp", args);
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
-    proc.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
-
-    const timeout = setTimeout(() => {
-      proc.kill();
-      console.error("[music] yt-dlp info timeout");
-      resolve(null);
-    }, 15_000);
-
-    proc.on("close", (code) => {
-      clearTimeout(timeout);
-      if (code !== 0) {
-        console.error("[music] yt-dlp info error:", stderr.trim().split("\n")[0]);
-        resolve(null);
-        return;
-      }
-      try {
-        // yt-dlp may print multiple JSON lines for playlists; take the first
-        const firstLine = stdout.trim().split("\n")[0];
-        if (!firstLine) { resolve(null); return; }
-        const info = JSON.parse(firstLine) as YtDlpInfo;
-        const url = info.webpage_url ?? info.url ?? query;
-        const thumbnail =
-          info.thumbnail ??
-          info.thumbnails?.[info.thumbnails.length - 1]?.url ??
-          null;
-        resolve({
-          url,
-          title: info.title ?? "Titre inconnu",
-          durationFmt: fmtSeconds(info.duration ?? 0),
-          thumbnail,
-          requestedBy,
-        });
-      } catch (e) {
-        console.error("[music] yt-dlp JSON parse error:", e);
-        resolve(null);
-      }
-    });
-  });
-}
-
 /**
- * Spawn yt-dlp to download audio to stdout.
- * @discordjs/voice + FFmpeg (StreamType.Arbitrary) handles the transcoding.
+ * Resolve a search query or URL into a Track via play-dl (SoundCloud).
  */
-function spawnAudioStream(url: string): ChildProcess {
-  return spawn("yt-dlp", [
-    "-o", "-",
-    "-f", "bestaudio/best",
-    "--quiet",
-    "--no-playlist",
-    "--no-warnings",
-    "--socket-timeout", "10",
-    url,
-  ]);
+async function resolveTrack(query: string, requestedBy: string): Promise<Track | null> {
+  try {
+    const isUrl = /^https?:\/\//.test(query);
+
+    let info: { url: string; title: string; durationInSec: number; thumbnail?: { url: string } } | null = null;
+
+    if (isUrl) {
+      // Direct SoundCloud URL
+      const validated = play.yt_validate(query);
+      if (validated === "video") {
+        // YouTube URL — won't work in prod, reject early
+        return null;
+      }
+      const scInfo = await play.soundcloud(query);
+      // SoundCloud returns SoundCloudTrack | SoundCloudPlaylist; thumbnail only on tracks
+      const thumb = "thumbnail" in scInfo && scInfo.thumbnail ? scInfo.thumbnail : undefined;
+      info = {
+        url: scInfo.url,
+        title: scInfo.name,
+        durationInSec: scInfo.durationInSec,
+        thumbnail: thumb ? { url: thumb } : undefined,
+      };
+    } else {
+      // Text search → SoundCloud
+      const results = await play.search(query, {
+        source: { soundcloud: "tracks" },
+        limit: 1,
+      });
+      if (!results.length) return null;
+      const r = results[0]!;
+      info = {
+        url: r.url,
+        title: r.name,
+        durationInSec: r.durationInSec,
+        thumbnail: r.thumbnail ? { url: r.thumbnail } : undefined,
+      };
+    }
+
+    if (!info) return null;
+
+    return {
+      url: info.url,
+      title: info.title,
+      durationFmt: fmtSeconds(info.durationInSec),
+      thumbnail: info.thumbnail?.url ?? null,
+      requestedBy,
+    };
+  } catch (err) {
+    console.error("[music] resolveTrack error:", (err as Error).message);
+    return null;
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -165,36 +134,14 @@ async function playNext(guildId: string): Promise<void> {
 
   const track = q.tracks[0]!;
 
-  // Kill any previous yt-dlp process
-  q.currentProc?.kill();
-  q.currentProc = undefined;
-
   try {
-    const proc = spawnAudioStream(track.url);
-    q.currentProc = proc;
-
-    // Log yt-dlp stderr for debugging
-    proc.stderr?.on("data", (d: Buffer) => {
-      const msg = d.toString().trim();
-      if (msg) console.error("[music] yt-dlp:", msg);
+    const stream = await play.stream(track.url, { discordPlayerCompatibility: true });
+    const resource = createAudioResource(stream.stream, {
+      inputType: stream.type as StreamType,
     });
-
-    // If yt-dlp exits with error before the stream is consumed, skip track
-    proc.on("error", (err) => {
-      console.error("[music] yt-dlp spawn error:", err.message);
-      const current = queues.get(guildId);
-      if (!current || current.destroying) return;
-      current.tracks.shift();
-      void playNext(guildId);
-    });
-
-    const resource = createAudioResource(proc.stdout!, {
-      inputType: StreamType.Arbitrary, // FFmpeg transcodes to Opus
-    });
-
     q.player.play(resource);
   } catch (err) {
-    console.error("[music] playNext error:", (err as Error).message);
+    console.error("[music] playNext stream error:", (err as Error).message);
     q.tracks.shift();
     await playNext(guildId);
   }
@@ -204,7 +151,6 @@ function destroyQueue(guildId: string): void {
   const q = queues.get(guildId);
   if (q) {
     q.destroying = true;
-    q.currentProc?.kill();
     q.player.stop(true);
     queues.delete(guildId);
   }
@@ -230,11 +176,12 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
   const query = interaction.options.getString("query", true);
   const guildId = interaction.guildId!;
 
-  // Resolve metadata BEFORE joining voice
   await interaction.editReply({ content: "🔍 Recherche en cours…" });
   const track = await resolveTrack(query, interaction.user.username);
   if (!track) {
-    await interaction.editReply({ content: "❌ Aucun résultat trouvé sur SoundCloud. Essaie un titre différent ou colle une URL directe." });
+    await interaction.editReply({
+      content: "❌ Aucun résultat trouvé sur SoundCloud. Essaie un titre différent ou colle une URL SoundCloud directe.",
+    });
     return;
   }
 
@@ -269,7 +216,6 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
     };
     queues.set(guildId, q);
 
-    // Reconnect on unexpected network drops
     connection.on(VoiceConnectionStatus.Disconnected, async () => {
       const current = queues.get(guildId);
       if (!current || current.destroying) return;
@@ -283,7 +229,6 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
       }
     });
 
-    // Advance queue when a track finishes
     player.on(AudioPlayerStatus.Idle, () => {
       const current = queues.get(guildId);
       if (!current || current.destroying) return;
@@ -326,7 +271,6 @@ export async function handleSkip(interaction: ChatInputCommandInteraction): Prom
     return;
   }
   const skipped = q.tracks[0]!.title;
-  q.currentProc?.kill();
   q.tracks.shift();
   await playNext(guildId);
   await interaction.reply({
