@@ -12,7 +12,6 @@
  *  - Auto-leave si seul en vocal (60 s)
  */
 
-import { spawn } from "node:child_process";
 import play from "play-dl";
 import {
   joinVoiceChannel,
@@ -22,7 +21,6 @@ import {
   VoiceConnectionStatus,
   getVoiceConnection,
   entersState,
-  StreamType,
   type AudioPlayer,
   type AudioResource,
 } from "@discordjs/voice";
@@ -85,47 +83,6 @@ export async function initMusic(): Promise<void> {
 
 const queues = new Map<string, GuildQueue>();
 
-// ─────────────────────────────────────────────
-// SoundCloud progressive stream
-// ─────────────────────────────────────────────
-
-interface ScTranscoding {
-  url: string;
-  format: { protocol: string; mime_type: string };
-}
-interface ScTrackInfo {
-  media?: { transcodings?: ScTranscoding[] };
-}
-
-async function getProgressiveStreamUrl(trackPageUrl: string): Promise<string | null> {
-  if (!scClientId) return null;
-  try {
-    const resolveRes = await fetch(
-      `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(trackPageUrl)}&client_id=${scClientId}`,
-      { signal: AbortSignal.timeout(10_000) },
-    );
-    if (!resolveRes.ok) return null;
-
-    const track = (await resolveRes.json()) as ScTrackInfo;
-    const transcodings = track.media?.transcodings ?? [];
-    const progressive = transcodings.find((t) => t.format.protocol === "progressive");
-    const hls = transcodings.find((t) => t.format.protocol === "hls");
-    const chosen = progressive ?? hls;
-    if (!chosen) return null;
-
-    const streamRes = await fetch(
-      `${chosen.url}?client_id=${scClientId}`,
-      { signal: AbortSignal.timeout(10_000) },
-    );
-    if (!streamRes.ok) return null;
-
-    const streamData = (await streamRes.json()) as { url: string };
-    return streamData.url ?? null;
-  } catch (err) {
-    console.error("[music] getProgressiveStreamUrl:", (err as Error).message);
-    return null;
-  }
-}
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -243,46 +200,13 @@ async function playNext(guildId: string): Promise<void> {
   const track = q.tracks[0]!;
 
   try {
-    const streamUrl = await getProgressiveStreamUrl(track.url);
-    if (!streamUrl) throw new Error("Impossible de récupérer l'URL de stream SoundCloud.");
+    // play-dl handles SoundCloud auth internally (same token as search)
+    const stream = await play.stream(track.url, { quality: 1 });
 
-    const proc = spawn("ffmpeg", [
-      "-reconnect", "1",
-      "-reconnect_streamed", "1",
-      "-reconnect_delay_max", "5",
-      "-i", streamUrl,
-      "-vn",
-      "-f", "ogg",
-      "-c:a", "libopus",
-      "-ar", "48000",
-      "-ac", "2",
-      "-b:a", "128k",
-      "pipe:1",
-    ]);
-
-    proc.stderr?.on("data", (d: Buffer) => {
-      const msg = d.toString().trim();
-      if (msg && !msg.startsWith("size=") && !msg.startsWith("frame=") && !msg.startsWith("Output")) {
-        // Only log errors, not progress
-        if (msg.includes("Error") || msg.includes("error") || msg.includes("Invalid")) {
-          console.error("[music] ffmpeg:", msg);
-        }
-      }
-    });
-
-    proc.on("error", (err: Error) => {
-      console.error("[music] ffmpeg spawn error:", err.message);
-      const current = queues.get(guildId);
-      if (!current || current.destroying) return;
-      current.tracks.shift();
-      void playNext(guildId);
-    });
-
-    const resource = createAudioResource(proc.stdout!, {
-      inputType: StreamType.OggOpus,
+    const resource = createAudioResource(stream.stream, {
+      inputType: stream.type,
       inlineVolume: true,
     });
-    // Apply stored volume (100 = 1.0 = normal)
     resource.volume?.setVolume(q.volume / 100);
     q.currentResource = resource;
     q.player.play(resource);
