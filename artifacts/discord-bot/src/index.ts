@@ -24,6 +24,7 @@ import {
   handleMarryButton,
   handlePollVote,
   HELP_SELECT_ID,
+  initMusic,
 } from "./commands.js";
 import { MARRY_ACCEPT_PREFIX, MARRY_DECLINE_PREFIX } from "./marriage.js";
 import { cleanupAllOrphanedTempVCs, cleanupTempVC, isHubChannel, isTempVC, registerTempVC } from "./tempvc.js";
@@ -168,6 +169,7 @@ client.once(Events.ClientReady, async (c) => {
   );
   await syncCommands(c.user.id);
   updatePresence();
+  void initMusic();
 
   // Pre-warm permission + settings caches for every guild so the first
   // command handler never blocks on loadJson → interactions stay within

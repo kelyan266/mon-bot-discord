@@ -66,7 +66,9 @@ import {
   handleResume,
   handleSkip,
   handleStop,
+  initMusic,
 } from "./music.js";
+export { initMusic };
 import {
   clearWelcomeConfig,
   generateWelcomeMessage,

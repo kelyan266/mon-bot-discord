@@ -48,6 +48,24 @@ interface GuildQueue {
 }
 
 // ─────────────────────────────────────────────
+// Initialisation
+// ─────────────────────────────────────────────
+
+/**
+ * Doit être appelé une fois au démarrage du bot (après ClientReady).
+ * Récupère un client_id SoundCloud depuis le site public.
+ */
+export async function initMusic(): Promise<void> {
+  try {
+    const clientId = await play.getFreeClientID();
+    play.setToken({ soundcloud: { client_id: clientId } });
+    console.log("[music] SoundCloud client_id initialisé.");
+  } catch (err) {
+    console.error("[music] Impossible d'initialiser le client_id SoundCloud :", (err as Error).message);
+  }
+}
+
+// ─────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────
 
