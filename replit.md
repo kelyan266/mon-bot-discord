@@ -59,3 +59,4 @@ Env vars / secrets:
 The bot auto-syncs slash commands on startup. Workflow: "Discord Bot".
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+# redeploy
