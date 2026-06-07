@@ -73,6 +73,27 @@ export async function initMusic(client: Client): Promise<void> {
     console.warn(`[music] Lavalink déconnecté: ${node.options.host}`);
   });
 
+  // Player events — pour diagnostiquer l'absence de son
+  lavalink.on("trackStart", (player, track) => {
+    console.log(`[music] trackStart guild=${player.guildId} track="${track?.info.title ?? "inconnu"}"`);
+  });
+
+  lavalink.on("trackEnd", (player, track, payload) => {
+    console.log(`[music] trackEnd guild=${player.guildId} track="${track?.info.title ?? "inconnu"}" reason=${payload.reason}`);
+  });
+
+  lavalink.on("trackError", (player, track, payload) => {
+    console.error(`[music] trackError guild=${player.guildId} track="${track?.info.title ?? "inconnu"}" error=${JSON.stringify(payload)}`);
+  });
+
+  lavalink.on("trackStuck", (player, track, payload) => {
+    console.warn(`[music] trackStuck guild=${player.guildId} track="${track?.info.title ?? "inconnu"}" threshold=${payload.thresholdMs}ms`);
+  });
+
+  lavalink.on("playerSocketClosed", (player, payload) => {
+    console.warn(`[music] playerSocketClosed guild=${player.guildId} code=${payload.code} reason="${payload.reason}" byRemote=${payload.byRemote}`);
+  });
+
   try {
     await lavalink.init({ id: client.user!.id, username: client.user!.username ?? "Bot" });
     console.log("[music] Lavalink initialisé.");
