@@ -26,6 +26,7 @@ import {
 // ─────────────────────────────────────────────
 
 let lavalink: LavalinkManager | null = null;
+let discordClient: Client | null = null;
 const autoLeaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const shuffleModes = new Map<string, boolean>(); // guildId → shuffle actif
 
@@ -34,30 +35,48 @@ const shuffleModes = new Map<string, boolean>(); // guildId → shuffle actif
 // ─────────────────────────────────────────────
 
 export async function initMusic(client: Client): Promise<void> {
+  discordClient = client;
   lavalink = new LavalinkManager({
     nodes: [
+      // Nœud principal (env override possible)
       {
         id: "main",
         host: process.env.LAVALINK_HOST ?? "lavalink.jirayu.net",
         port: parseInt(process.env.LAVALINK_PORT ?? "13592"),
         authorization: process.env.LAVALINK_PASSWORD ?? "youshallnotpass",
         secure: false,
+        retryDelay: 5000,
+        retryAmount: 3,
+      },
+      // Nœuds de fallback publics v4
+      {
+        id: "fallback1",
+        host: "v4.lavalink.rocks",
+        port: 443,
+        authorization: "horizxon.tech",
+        secure: true,
+        retryDelay: 5000,
+        retryAmount: 3,
       },
       {
-        id: "fallback",
-        host: "lava.link",
-        port: 80,
-        authorization: "discloud",
-        secure: false,
+        id: "fallback2",
+        host: "lavalink.darrennathanael.com",
+        port: 443,
+        authorization: "aaaa",
+        secure: true,
+        retryDelay: 5000,
+        retryAmount: 3,
       },
     ],
     sendToShard: (guildId: string, payload: unknown) => {
-      client.guilds.cache.get(guildId)?.shard?.send(payload);
+      const guild = client.guilds.cache.get(guildId);
+      guild?.shard?.send(payload);
     },
     client: { id: client.user!.id, username: client.user!.username ?? "Bot" },
     autoSkip: true,
     playerOptions: {
-      defaultSearchPlatform: "ytsearch",
+      // SoundCloud en priorité — YouTube streaming souvent bloqué sur nœuds publics
+      defaultSearchPlatform: "scsearch",
     },
   });
 
@@ -83,7 +102,26 @@ export async function initMusic(client: Client): Promise<void> {
   });
 
   lavalink.on("trackError", (player, track, payload) => {
-    console.error(`[music] trackError guild=${player.guildId} track="${track?.info.title ?? "inconnu"}" error=${JSON.stringify(payload)}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const exc = (payload as any)?.exception;
+    const msg = exc?.message ?? exc?.cause ?? "erreur inconnue";
+    console.error(`[music] trackError guild=${player.guildId} track="${track?.info.title ?? "inconnu"}" message="${msg}" severity=${exc?.severity ?? "?"}`);
+
+    if (player.textChannelId && discordClient) {
+      const ch = discordClient.channels.cache.get(player.textChannelId);
+      if (ch && "send" in ch && typeof (ch as { send?: unknown }).send === "function") {
+        void (ch as { send: (opts: unknown) => Promise<unknown> }).send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xed4245)
+              .setTitle("❌ Erreur de lecture")
+              .setDescription(
+                `Impossible de lire **${track?.info.title ?? "cette piste"}**.\n\`${msg}\`\n\nEssaie une autre source ou un autre titre.`,
+              ),
+          ],
+        });
+      }
+    }
   });
 
   lavalink.on("trackStuck", (player, track, payload) => {
@@ -243,15 +281,15 @@ export async function handlePlay(
 
   await interaction.editReply({ content: "🔍 Recherche en cours…" });
 
-  // YouTube en priorité → SoundCloud en fallback
-  let result = await player.search({ query, source: "ytsearch" }, interaction.user);
+  // SoundCloud en priorité (streaming stable) → YouTube en fallback
+  let result = await player.search({ query, source: "scsearch" }, interaction.user);
 
   if (
     !result.tracks.length ||
     result.loadType === "error" ||
     result.loadType === "empty"
   ) {
-    result = await player.search({ query, source: "scsearch" }, interaction.user);
+    result = await player.search({ query, source: "ytsearch" }, interaction.user);
   }
 
   if (!result.tracks.length || result.loadType === "error") {
