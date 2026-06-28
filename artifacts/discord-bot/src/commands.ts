@@ -3320,7 +3320,10 @@ const KEY_PERMS: [bigint, string][] = [
   [PermissionFlagsBits.MentionEveryone, "Mentionner @everyone"],
   [PermissionFlagsBits.ManageNicknames, "Gérer les pseudos"],
   [PermissionFlagsBits.MuteMembers, "Mettre en sourdine"],
-  [PermissionFlagsBits.DeafenMembers, "Rendre sourd"],
+  [PermissionFlagsBits.DeafenMembers, "Rendre sourd"],,
+  { name: "active", description: "Definir le statut activite d'un membre", default_member_permissions: "268435456", dm_permission: false, options: [{ type: 6, name: "membre", description: "Le membre", required: true }, { type: 3, name: "statut", description: "Statut", required: true, choices: [{ name: "✅ True", value: "true" }, { name: "❌ False", value: "false" }] }, { type: 8, name: "role", description: "Le role", required: true }] },
+  { name: "apply-config", description: "Configurer le systeme de candidature", default_member_permissions: "32", dm_permission: false, options: [{ type: 3, name: "texte", description: "La question du formulaire", required: true }, { type: 7, name: "salon", description: "Salon de reception", required: true }] },
+  { name: "apply", description: "Soumettre une candidature", dm_permission: false }
 ];
 
 function ts(date: Date): string {
@@ -9223,3 +9226,4 @@ async function handleSanction(
 
   await interaction.editReply({ embeds: [embed] });
 }
+
