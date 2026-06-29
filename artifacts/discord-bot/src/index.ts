@@ -19,6 +19,9 @@ import {
   commandDefinitions,
   handleHelpSelect,
   handleInteraction,
+  handleApplyModal,
+  scheduleActiveMidnightReset,
+  APPLY_MODAL_ID,
   handleLeaderboardButton,
   handleLeaderboardSelect,
   handleMarryButton,
@@ -182,6 +185,7 @@ client.once(Events.ClientReady, async (c) => {
     `Toxicity detection: ${toxicityEnabled ? "enabled (gpt-5-nano)" : "disabled"}`,
   );
   await syncCommands(c.user.id);
+  scheduleActiveMidnightReset(c);
   updatePresence();
   void initMusic(c);
 
@@ -320,6 +324,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.isModalSubmit() && interaction.customId === APPLY_MODAL_ID) { await handleApplyModal(interaction as any); return; }
   if (!interaction.isChatInputCommand()) return;
   try {
     await handleInteraction(interaction);

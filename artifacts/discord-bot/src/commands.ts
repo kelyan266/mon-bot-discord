@@ -1,5 +1,10 @@
 import {
   ActionRowBuilder,
+  Client,
+  ModalBuilder,
+  ModalSubmitInteraction,
+  TextInputBuilder,
+  TextInputStyle,
   ActivityType,
   ApplicationCommandOptionType,
   ButtonBuilder,
@@ -3057,6 +3062,67 @@ async function checkBotRoleAccess(
   return true;
 }
 
+
+const membresActifs = new Map<string, { guildId: string; roleId: string }>();
+const applyConfig = new Map<string, { texte: string; salonId: string }>();
+const applyCounts = new Map<string, number>();
+export const APPLY_MODAL_ID = "apply_modal";
+const APPLY_INPUT_ID = "apply_reponse";
+
+async function handleActive(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.deferReply();
+  const membre = interaction.options.getMember("membre") as GuildMember | null;
+  const statut = interaction.options.getString("statut", true);
+  const role = interaction.options.getRole("role", true);
+  if (!membre) { await interaction.editReply({ content: "❌ Membre introuvable." }); return; }
+  const bot = interaction.guild!.members.me!;
+  if (role.position >= bot.roles.highest.position) { await interaction.editReply({ content: "❌ Mon rôle doit être plus haut dans la hiérarchie." }); return; }
+  if (statut === "true") {
+    await (membre as GuildMember).roles.add(role.id);
+    membresActifs.set(membre.id, { guildId: interaction.guild!.id, roleId: role.id });
+    await interaction.editReply({ embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setTitle("✅ Membre activé").addFields({ name: "👤 Membre", value: String(membre), inline: true }, { name: "📌 Statut", value: "`True`", inline: true }, { name: "🎭 Rôle", value: `<@&${role.id}>`, inline: true }, { name: "🕛 Reset", value: "Automatiquement à **minuit**" }).setFooter({ text: `Par ${interaction.user.tag}` }).setTimestamp()] });
+  } else {
+    if ((membre as GuildMember).roles.cache.has(role.id)) await (membre as GuildMember).roles.remove(role.id);
+    membresActifs.delete(membre.id);
+    await interaction.editReply({ embeds: [new EmbedBuilder().setColor(COLOR_DANGER).setTitle("❌ Membre désactivé").addFields({ name: "👤 Membre", value: String(membre), inline: true }, { name: "📌 Statut", value: "`False`", inline: true }, { name: "🎭 Rôle", value: `<@&${role.id}> retiré`, inline: true }).setFooter({ text: `Par ${interaction.user.tag}` }).setTimestamp()] });
+  }
+}
+
+async function handleApplyConfig(interaction: ChatInputCommandInteraction): Promise<void> {
+  const texte = interaction.options.getString("texte", true);
+  const salon = interaction.options.getChannel("salon", true);
+  applyConfig.set(interaction.guild!.id, { texte, salonId: salon.id });
+  await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_PRIMARY).setTitle("⚙️ Apply configuré").addFields({ name: "📝 Question", value: texte }, { name: "📨 Salon", value: `<#${salon.id}>` }).setTimestamp()], ephemeral: true });
+}
+
+async function handleApply(interaction: ChatInputCommandInteraction): Promise<void> {
+  const config = applyConfig.get(interaction.guild!.id);
+  if (!config) { await interaction.reply({ content: "❌ Utilise dabord /apply-config.", ephemeral: true }); return; }
+  const modal = new ModalBuilder().setCustomId(APPLY_MODAL_ID).setTitle("Candidature");
+  const input = new TextInputBuilder().setCustomId(APPLY_INPUT_ID).setLabel(config.texte.length > 45 ? config.texte.slice(0, 42) + "..." : config.texte).setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000);
+  modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+  await interaction.showModal(modal);
+}
+
+export async function handleApplyModal(interaction: ModalSubmitInteraction): Promise<void> {
+  const config = applyConfig.get(interaction.guild!.id);
+  if (!config) return;
+  const reponse = interaction.fields.getTextInputValue(APPLY_INPUT_ID);
+  const key = `${interaction.guild!.id}-${interaction.user.id}`;
+  const count = (applyCounts.get(key) ?? 0) + 1;
+  applyCounts.set(key, count);
+  const salon = interaction.guild!.channels.cache.get(config.salonId) as TextChannel | undefined;
+  if (!salon) { await interaction.reply({ content: "❌ Salon introuvable.", ephemeral: true }); return; }
+  await salon.send({ embeds: [new EmbedBuilder().setColor(COLOR_PRIMARY).setTitle("📋 Nouvelle candidature").setThumbnail(interaction.user.displayAvatarURL()).addFields({ name: "👤 Candidat", value: String(interaction.user), inline: true }, { name: "🔢 Apply n°", value: `${count}`, inline: true }, { name: `❓ ${config.texte}`, value: reponse }).setFooter({ text: `ID: ${interaction.user.id}` }).setTimestamp()] });
+  await interaction.reply({ embeds: [new EmbedBuilder().setColor(COLOR_SUCCESS).setTitle("✅ Candidature envoyée !").setDescription(`Ta candidature n°**${count}** a bien été transmise.`).setTimestamp()], ephemeral: true });
+}
+
+export function scheduleActiveMidnightReset(client: Client): void {
+  const midnight = new Date(); midnight.setHours(24, 0, 0, 0);
+  const run = async () => { for (const [uid, { guildId, roleId }] of membresActifs.entries()) { try { const g = await client.guilds.fetch(guildId); const m = await g.members.fetch(uid); if (m.roles.cache.has(roleId)) await m.roles.remove(roleId); } catch {} } membresActifs.clear(); };
+  setTimeout(async () => { await run(); setInterval(run, 86400000); }, midnight.getTime() - Date.now());
+}
+
 export async function handleInteraction(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -3269,6 +3335,12 @@ export async function handleInteraction(
       return handleInsulter(interaction);
     case "sanction":
       return handleSanction(interaction);
+    case "active":
+      return handleActive(interaction);
+    case "apply-config":
+      return handleApplyConfig(interaction);
+    case "apply":
+      return handleApply(interaction);
     default:
       await reply(
         interaction,
