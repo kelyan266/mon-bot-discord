@@ -188,11 +188,13 @@ function updatePresence(): void {
   client.user.setPresence({ status: "online", activities: [activity] });
 }
 
+updatePresence();
 setInterval(() => updatePresence(), 30_000).unref();
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag} (id: ${c.user.id})`);
   console.log(`Serving ${c.guilds.cache.size} guild(s).`);
+  updatePresence();
   console.log(
     `Toxicity detection: ${toxicityEnabled ? "enabled (gpt-5-nano)" : "disabled"}`,
   );
