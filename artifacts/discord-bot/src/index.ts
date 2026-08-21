@@ -79,6 +79,7 @@ import {
   handleTicketOpen,
 } from "./tickets.js";
 import type { GuildMember } from "discord.js";
+import http from "http";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 if (!token) {
@@ -94,6 +95,17 @@ const TOXICITY_DELETE_THRESHOLD = 0.8;
 const TOXICITY_TIMEOUT_THRESHOLD = 0.95;
 const TOXICITY_TIMEOUT_MINUTES = 10;
 const AUTO_ROLE_NAME = "random";
+
+const PORT = Number(process.env.PORT) || 3000;
+
+const server = http.createServer((_req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Discord bot is running\n");
+});
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`[HTTP] Server listening on port ${PORT}`);
+});
 
 const client = new Client({
   intents: [
