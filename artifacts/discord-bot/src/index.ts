@@ -159,34 +159,31 @@ function updatePresence(): void {
 
   type Activity = NonNullable<Parameters<typeof client.user.setPresence>[0]["activities"]>[number];
   const statuses: Activity[] = [
-    {
-      name: `${members.toLocaleString("fr-FR")} membres`,
-      type: ActivityType.Watching,
-    },
-    {
-      name: `/help • ${guilds} serveur${guilds !== 1 ? "s" : ""}`,
-      type: ActivityType.Playing,
-    },
-    {
-      name: `un vocal • ${guilds} serveur${guilds !== 1 ? "s" : ""}`,
-      type: ActivityType.Streaming,
-      url: "https://www.twitch.tv/louboutin",
-    },
-    {
-      name: `${cmds} commandes`,
-      type: ActivityType.Playing,
-    },
-    {
-      name: `la modération`,
-      type: ActivityType.Watching,
-    },
-  ];
+  {
+    name: "ton serveur 👑",
+    type: ActivityType.Playing,
+  },
+  {
+    name: "/help pour découvrir mes commandes",
+    type: ActivityType.Playing,
+  },
+  {
+    name: `${guilds} serveurs`,
+    type: ActivityType.Watching,
+  },
+  {
+    name: "la modération 🛡️",
+    type: ActivityType.Watching,
+  },
+];
 
-  const activity = statuses[presenceIndex % statuses.length]!;
-  presenceIndex++;
+const activity = statuses[presenceIndex % statuses.length]!;
+presenceIndex++;
 
-  client.user.setPresence({ status: "online", activities: [activity] });
-}
+client.user.setPresence({
+  status: "online",
+  activities: [activity],
+});
 
 updatePresence();
 setInterval(() => updatePresence(), 30_000).unref();

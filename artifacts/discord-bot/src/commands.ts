@@ -228,6 +228,11 @@ const COLOR_DANGER = 0xed4245;
 export const commandDefinitions: RESTPostAPIChatInputApplicationCommandsJSONBody[] =
   [
     {
+      name: "owner",
+      description: "Ping le propriétaire du bot",
+      dm_permission: false,
+    },
+    {
       name: "avatar",
       description: "Affiche l'avatar HD + bannière d'un membre",
       dm_permission: false,
@@ -3155,6 +3160,23 @@ export async function handleInteraction(
   }
 
   switch (interaction.commandName) {
+    case "owner": {
+      const ownerId = process.env.OWNER_ID;
+
+      if (!ownerId) {
+        await interaction.reply({
+          content: "❌ OWNER_ID n'est pas configuré dans les variables d'environnement du bot.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      await interaction.reply({
+        content: `<@${ownerId}>`,
+        allowedMentions: { users: [ownerId] },
+      });
+      return;
+    }
     case "avatar":
       return handleAvatar(interaction);
     case "serverinfo":
