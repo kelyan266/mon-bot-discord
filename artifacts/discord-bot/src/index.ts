@@ -153,39 +153,44 @@ let presenceIndex = 0;
 
 function updatePresence(): void {
   if (!client.user) return;
+
   const guilds = client.guilds.cache.size;
-  const members = client.guilds.cache.reduce((acc, g) => acc + g.memberCount, 0);
-  const cmds = commandDefinitions.length;
 
-  type Activity = NonNullable<Parameters<typeof client.user.setPresence>[0]["activities"]>[number];
+  type Activity = NonNullable<
+    Parameters<typeof client.user.setPresence>[0]["activities"]
+  >[number];
+
   const statuses: Activity[] = [
-  {
-    name: "ton serveur 👑",
-    type: ActivityType.Playing,
-  },
-  {
-    name: "/help pour découvrir mes commandes",
-    type: ActivityType.Playing,
-  },
-  {
-    name: `${guilds} serveurs`,
-    type: ActivityType.Watching,
-  },
-  {
-    name: "la modération 🛡️",
-    type: ActivityType.Watching,
-  },
-];
+    {
+      name: "@njbp 👑",
+      type: ActivityType.Playing,
+    },
+    {
+      name: "/help pour découvrir mes commandes",
+      type: ActivityType.Playing,
+    },
+    {
+      name: `${guilds} serveurs`,
+      type: ActivityType.Watching,
+    },
+    {
+      name: "la modération 🛡️",
+      type: ActivityType.Watching,
+    },
+    {
+      name: "/owner",
+      type: ActivityType.Playing,
+    },
+  ];
 
-const activity = statuses[presenceIndex % statuses.length]!;
-presenceIndex++;
+  const activity = statuses[presenceIndex % statuses.length]!;
+  presenceIndex++;
 
-client.user.setPresence({
-  status: "online",
-  activities: [activity],
-});
+  client.user.setPresence({
+    status: "online",
+    activities: [activity],
+  });
 }
-
 updatePresence();
 setInterval(() => updatePresence(), 30_000).unref();
 
