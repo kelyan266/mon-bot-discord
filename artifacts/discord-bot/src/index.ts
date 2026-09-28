@@ -184,6 +184,7 @@ client.user.setPresence({
   status: "online",
   activities: [activity],
 });
+}
 
 updatePresence();
 setInterval(() => updatePresence(), 30_000).unref();
